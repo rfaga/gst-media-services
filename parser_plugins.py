@@ -48,7 +48,7 @@ for plugin in plugins:
 		except:
 			pass
 #print pads
-#print muxers
+print muxers
 
 def print_list(list):
 	print("( Muxer - Encoder )")
@@ -67,4 +67,4 @@ for muxer in muxers:
 			else:
 				unknowns += [[muxer, encoder]]
 
-print_list(connections)
+#print_list(connections)
