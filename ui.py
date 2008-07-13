@@ -1,5 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+###############################################################################
+# This file is part of gst-media-services.                                    #
+# Copyright (C) 2008 Roberto Faga Jr, Stefan Kost and Gstreamer team.         #
+#                                                                             #
+# This program is free software: you can redistribute it and/or modify        #
+# it under the terms of the GNU General Public License as published by        #
+# the Free Software Foundation, version 3.                                    #
+#                                                                             #
+# This program is distributed in the hope that it will be useful,             #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+# GNU General Public License for more details.                                #
+#                                                                             #
+# You should have received a copy of the GNU General Public License           #
+# along with this program.  See LICENSE file.                                 #
+###############################################################################
 
 import gtk, gtk.glade, gobject
 
@@ -49,6 +65,7 @@ class InputObject():
         self.uri = uri
     
     def __str__(self):
+        #TODO: this method should show it's representation to the file list
         return "<b>%s</b>"%self.uri
 
 class FileList(object):
@@ -65,9 +82,15 @@ class FileList(object):
         self.parent = parent
         self.widget = widgets.get_widget("filelist")
         self.widget.get_selection().set_mode(gtk.SELECTION_MULTIPLE)
-        self.model = gtk.ListStore(gobject.TYPE_STRING)
+
+        # our model shows the file, firstly it's string, followed by itself.
+        #XXX: the string isn't being updated if any change occurs in the object
+        self.model = gtk.ListStore(gobject.TYPE_STRING, gobject.TYPE_PYOBJECT)
         self.widget.set_model(self.model)
-        column = gtk.TreeViewColumn("File name", gtk.CellRendererText(), text=0)
+        renderer = gtk.CellRendererText()
+
+        # create a column which uses markup
+        column = gtk.TreeViewColumn("filename", renderer,  markup=0)
         self.widget.append_column(column)
 
 
@@ -79,7 +102,8 @@ class FileList(object):
         """
         self.files = files
         for f in files:
-            self.model.append([InputObject(f)])
+            i = InputObject(f)
+            self.model.append((str(i), i))
 
     def remove_files(self):
         """
