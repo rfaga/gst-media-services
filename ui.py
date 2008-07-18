@@ -17,7 +17,11 @@
 # along with this program.  See LICENSE file.                                 #
 ###############################################################################
 
-import gtk, gtk.glade, gobject
+import gstms
+import gtk, gtk.glade
+
+import gobject; gobject.threads_init()
+
 
 GLADE_PATH = "convert_anything.glade"
 
@@ -27,6 +31,7 @@ INPUT_OFF = 2
 TARGET_OFF = 3
 
 widgets = gtk.glade.XML(GLADE_PATH)
+
 
 class FileChooserDialog:
     def __init__(self, parent):
@@ -51,22 +56,28 @@ class FileChooserDialog:
     def on_button_fc_cancel_clicked(self, widget):
         self.hide()
 
-class InputObject():
+class InputObject(gstms.File):
     """
     A file / input stream
     """
 
-    def __init__(self, uri):
+    def __init__(self, uri, model):
         """
         Constructor.
         
         uri -- URI path, based in GnomeVFS
         """
-        self.uri = uri
+        self.model = model
+        gstms.File.__init__(self, uri)
     
+    def on_discover(self, discover, success):
+        gstms.File.on_discover(self, discover, success)
+        self.model.append((str(self), self))
+
     def __str__(self):
         #TODO: this method should show it's representation to the file list
-        return "<b>%s</b>"%self.uri
+        return "%s"%(self.uri)
+
 
 class FileList(object):
     """
@@ -93,17 +104,11 @@ class FileList(object):
         column = gtk.TreeViewColumn("filename", renderer,  markup=0)
         self.widget.append_column(column)
 
-
     def add_files(self, files):
-        """
-        Add files to the FileList
-        ---
-        files -- input files, in GnomeVFS format (URI)
-        """
-        self.files = files
         for f in files:
-            i = InputObject(f)
-            self.model.append((str(i), i))
+            i = InputObject(f, self.model)
+            #gstms.TypeFinder(i)
+            #self.queue += [gstms.Decoder(i)]
 
     def remove_files(self):
         """
@@ -180,6 +185,7 @@ class MainDialog:
         """
         files -- A python list of files, in URI format. This URI uses GnomeVFS.
         """
+        #thread.start_new_thread(add_files, (files, self.filelist.model))
         self.filelist.add_files(files)
 
 main = MainDialog(PIPELINE_ONLY)

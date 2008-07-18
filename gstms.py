@@ -17,8 +17,10 @@
 # along with this program.  See LICENSE file.                                 #
 ###############################################################################
 
-import gobject, gst
+import gobject; gobject.threads_init()
 
+import gnomevfs, gst
+from gst.extend.discoverer import Discoverer
 import time
 
 FILE_SOURCE = "gnomevfssrc"
@@ -35,15 +37,25 @@ class File(object):
         uri -- file uri
         """
         self.uri = uri
+        decoder = Discoverer(gnomevfs.get_local_path_from_uri(uri))
+        decoder.connect("discovered", self.on_discover)
+        decoder.discover()
         self.mimetype = None
+        self.caps = []
     
+    def on_discover(self, discover, success):
+        if success:
+            self.set_mimetype(discover.mimetype.split(",")[0])
+        print discover.is_video, discover.is_audio, success
+
     def set_mimetype(self, mimetype):
         """
         
         mimetype -- Mimetype string of this file
         """
         self.mimetype = mimetype
-        print mimetype        
+        #print mimetype
+
 
 class Pipeline:
     """
@@ -55,7 +67,7 @@ class Pipeline:
         Constructor, don't forget to construct the pipeline before using it
         """
         self.pipeline = gst.Pipeline(name)
-        self.stop()
+        #self.stop()
         
 
     def on_message(self, bus, message):
@@ -63,18 +75,18 @@ class Pipeline:
         Message from bus!
         """
         t = message.type
-        print "Incoming message! - '%s'"%t
+        #print "Incoming message! - '%s'"%t
         # If process ended
         if t == gst.MESSAGE_EOS:
-            pass#self.stop()
-        elif t == gst.MESSAGE_ERROR:
+            self.stop()
+        #elif t == gst.MESSAGE_ERROR:
             #TODO: send error message to a right place
-            print message.parse_error()
+            #print message.parse_error()
         elif t == gst.MESSAGE_TAG:
-            self.found_tag(element, message.parse_tag()) 
+            self.found_tag(message.parse_tag()) 
 
-    def found_tag(self, element, message):
-        print message
+    def found_tag(self, message):
+        print message.keys()
 
     def play(self):
         bus = self.pipeline.get_bus()
@@ -86,10 +98,13 @@ class Pipeline:
         self.state = gst.STATE_PLAYING
 
     def stop(self):
-        bus = self.pipeline.get_bus()
-        bus.disconnect(self.watch_id)
-        bus.remove_signal_watch()
-
+        try:
+            bus = self.pipeline.get_bus()
+            bus.disconnect(self.watch_id)
+            bus.remove_signal_watch()
+            del self.watch_id
+        except:
+            pass #do nothing
         self.pipeline.set_state(gst.STATE_NULL)
         self.state = gst.STATE_NULL
 
@@ -99,17 +114,17 @@ class TypeFinder(Pipeline):
     A class to make an object which find every type of files / streams.
     """
 
-    def __init__(self ):
+    def __init__(self, file):
         """
         Constructor
         """
-        # list of files to get info
-        self.files = []
         Pipeline.__init__(self, "typefinder")
 
         self.source = gst.element_factory_make(FILE_SOURCE, "filesource")
         self.pipeline.add(self.source)
 
+        self.current_file = file
+        self.source.set_property("location", file.uri)
         typefind = gst.element_factory_make("typefind", "typefind")
         typefind.connect("have-type", self.have_type)
         self.pipeline.add(typefind)
@@ -118,6 +133,7 @@ class TypeFinder(Pipeline):
         self.pipeline.add(fakesink)
 
         gst.element_link_many(self.source, typefind, fakesink)
+        self.play()
 
     def have_type(self, typefind, probability, caps):
         """
@@ -130,62 +146,69 @@ class TypeFinder(Pipeline):
         self.caps = caps.to_string().split(",")[0]
         if "current_file" in dir(self):
             self.current_file.set_mimetype(self.caps)
+            del self
 
-    def add_file(self, file):
-        """
-        add a file to the queue to detect what is its type.
 
-        file -- file in File format
-
-        returns the type
-        """
-        self.files += [file]
-        if self.state == gst.STATE_NULL:
-            self.process_next()
-
-    def process_next(self):
-        if self.files:
-            file = self.files.pop(0)
-            self.current_file = file
-            self.source.set_property("location", file.uri)
-            self.play()
-            #self.stop()
-
-class Decoder(Pipeline):
+class Decoder_(Pipeline):
     """
     A pipeline factory to decode files and get info from them
     """
 
-    def __init__(self):
+    def __init__(self, file):
         """
         Constructor
         """
         
-        files = []
         Pipeline.__init__(self, "decoder")
 
         self.source = gst.element_factory_make(FILE_SOURCE, "filesource")
         self.pipeline.add(self.source)
         
         decodebin = gst.element_factory_make("decodebin2", "decodebin")
-        #decodebin.connect("new-decoded-pad", self.new_decoded_pad)
+        decodebin.connect("new-decoded-pad", self.new_decoded_pad)
         self.pipeline.add(decodebin)
 
         self.fakesink = gst.element_factory_make("fakesink", "fakesink")
         self.pipeline.add(self.fakesink)
 
         gst.element_link_many(self.source, decodebin)
+        self.current_file = file
+        self.source.set_property("location", file.uri)
+        self.play()
 
     def new_decoded_pad(self, element, pad, boolean):
         """
-        
         element -- Current element (decodebin)
         pad -- new pad created
         boolean -- ahm?
         """
-        print "called new_decoded_pad: %s"%pad.get_caps().to_string()
+        print "called new_decoded_pad: %s"%pad.get_caps().to_string().split(",")[0]
+        self.current_file.add_caps(pad.get_caps().to_string())
         #gst.message_new_custom(gst.MESSAGE_EOS, self.pipeline, gst.Structure("finish it"))
 
-    def decode(self, file):
-        self.source.set_property("location", file.uri)
-        self.play()
+
+import gst.extend.discoverer as decoder
+class Decoder(decoder.Discoverer):
+    def __init__(self, file):
+        """
+        
+        file -- A file with .uri as attribute
+        """
+        decoder.Discoverer.__init__(self, file)
+        
+
+
+### Testing!!!
+
+#v = File('/home/faga/video.mpg')
+#m = File('/home/faga/music.mp3')
+
+#Decoder(v)
+#dec.decode(v)
+#dec.decode(m)
+
+#tf = TypeFinder()
+#tf.add_file(m)
+
+#while True:
+#    pass
