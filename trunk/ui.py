@@ -19,9 +19,8 @@
 
 import gstms
 import gtk, gtk.glade
-
-import gobject; gobject.threads_init()
-
+import gobject
+import thread
 
 GLADE_PATH = "convert_anything.glade"
 
@@ -56,6 +55,7 @@ class FileChooserDialog:
     def on_button_fc_cancel_clicked(self, widget):
         self.hide()
 
+
 class InputObject(gstms.File):
     """
     A file / input stream
@@ -76,7 +76,13 @@ class InputObject(gstms.File):
 
     def __str__(self):
         #TODO: this method should show it's representation to the file list
-        return "%s"%(self.uri)
+        if self.mediatype == gstms.VIDEO_TYPE:
+            tag = "video"
+        elif self.mediatype == gstms.AUDIO_TYPE:
+            tag = "audio"
+        else:
+            tag = "unknow"
+        return "(%s) %s"%(tag, self.uri)
 
 
 class FileList(object):
@@ -185,8 +191,8 @@ class MainDialog:
         """
         files -- A python list of files, in URI format. This URI uses GnomeVFS.
         """
-        #thread.start_new_thread(add_files, (files, self.filelist.model))
-        self.filelist.add_files(files)
+        thread.start_new_thread(self.filelist.add_files, (files,))
+        #self.filelist.add_files(files)
 
 main = MainDialog(PIPELINE_ONLY)
 gtk.main()
