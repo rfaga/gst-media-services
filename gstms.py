@@ -19,9 +19,17 @@
 
 import gobject; gobject.threads_init()
 
-import gnomevfs, gst
+import gnomevfs, gst, os
 from gst.extend.discoverer import Discoverer
 import time
+import xml.dom.minidom as xmldom
+
+
+VIDEO_TYPE = 1
+AUDIO_TYPE = 2
+DATA_TYPE = 3
+
+
 
 FILE_SOURCE = "gnomevfssrc"
 
@@ -37,15 +45,20 @@ class File(object):
         uri -- file uri
         """
         self.uri = uri
-        decoder = Discoverer(gnomevfs.get_local_path_from_uri(uri))
-        decoder.connect("discovered", self.on_discover)
-        decoder.discover()
+        self.decoder = Discoverer(gnomevfs.get_local_path_from_uri(uri))
+        self.decoder.connect("discovered", self.on_discover)
+        self.decoder.discover()
         self.mimetype = None
-        self.caps = []
     
     def on_discover(self, discover, success):
-        if success:
-            self.set_mimetype(discover.mimetype.split(",")[0])
+        #if success:
+        self.set_mimetype(discover.mimetype.split(",")[0])
+        if discover.is_video:
+            self.mediatype = VIDEO_TYPE
+        elif discover.is_audio:
+            self.mediatype = AUDIO_TYPE
+        else:
+            self.mediatype = DATA_TYPE
         print discover.is_video, discover.is_audio, success
 
     def set_mimetype(self, mimetype):
@@ -56,7 +69,60 @@ class File(object):
         self.mimetype = mimetype
         #print mimetype
 
+def get_all_xmls():
+    #TODO: I need to read XMLs from the /usr/share folder (a system folder) and from a home folder (like ~/.gstms in UNIX-like)
+    HOME_PATH = os.path.expanduser("~/.gstms")
+    SYSTEM_PATH = "profiles/" #local path, same of source file, for now...
 
+    profiles_path = os.listdir(SYSTEM_PATH)
+    for path in profiles_path:
+        doc = xmldom.parse(os.path.join(os.path.abspath("."), path))
+
+    
+
+    
+
+def get_profiles():
+    """
+    Get all possible profiles from XML databases.
+    """
+#TODO: Get all XML data into a string, concatenated
+    
+
+
+#TODO: Parse string data into profiles
+
+
+class Profile(object):
+    """
+    A profile class, with helpful properties and methods.
+    This profile means variables and pipeline to a Gstreamer conversion.
+    """
+
+    id = None
+    output_file_extension = None
+    elements_needed = []
+    mimetypes = []
+    pipeline_process = None
+    variables = []
+    type = DATA_TYPE
+
+    def __init__(self, id):
+        """
+        Constructor.
+        
+        id -- id of a profile, the same of XML Profile.
+        """
+        self.id = id
+
+    #XXX: In the future, do a write method to write a profile into a file, so editing is easier.
+
+
+
+
+##################### UNUSED CODE #######################
+# For now this code above is not being used
+# but I'll let them there because I'll use pipelines...
 class Pipeline:
     """
     Pipeline class, to simplify other pipeline uses
@@ -186,29 +252,3 @@ class Decoder_(Pipeline):
         self.current_file.add_caps(pad.get_caps().to_string())
         #gst.message_new_custom(gst.MESSAGE_EOS, self.pipeline, gst.Structure("finish it"))
 
-
-import gst.extend.discoverer as decoder
-class Decoder(decoder.Discoverer):
-    def __init__(self, file):
-        """
-        
-        file -- A file with .uri as attribute
-        """
-        decoder.Discoverer.__init__(self, file)
-        
-
-
-### Testing!!!
-
-#v = File('/home/faga/video.mpg')
-#m = File('/home/faga/music.mp3')
-
-#Decoder(v)
-#dec.decode(v)
-#dec.decode(m)
-
-#tf = TypeFinder()
-#tf.add_file(m)
-
-#while True:
-#    pass
