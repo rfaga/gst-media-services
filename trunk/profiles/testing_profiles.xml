@@ -8,71 +8,36 @@
 		
 		<output-file-extension>mp3</output-file-extension>
 		
-		<element-needed>lame</element-needed>
 		
 		<mimetype>audio/mp3</mimetype>
 		<mimetype>audio/mpeg3</mimetype>
+
 		<pipeline>
-			<process>
-				<element id="audioconvert" type="required" />
-				<element id="lame" type="required">
-					<property id="bitrate" type="optional" />
-					<property id="vbr" type="optional" />
-						<!--<if expression="vbr!=0" />--> <!-- vbr!=0 need to use html encoded chars -->
-				</element>
-				<if expression="vbr != 0">
-					<element id="xingmux" type="optional" />
-					<element id="id3v2mux" type="optional" />
-				</if>
-				<if expression="exist(id3v2mux)">
-					<element id="id3v2mux" type="optional" />
-				</if>
-				<elif expression="exist(id3mux)">
-					<element id="id3mux type="/>
-				</elif>
-				<!--audioconvert ! lame +bitrate+ +quality+ ! +xingmux+ ! +id3v2mux+ ! +id3mux-->
-			</process>
-			<variable id="vbr_mode">
-				<name>VBR Mode</name>
-				<name xml:lang="pt_BR">Modo VBR</name>
-				<control-type>combo</control-type>
-				<default-value>0</default-value>
-				<possible-values>
-					<value value="0" enables="bitrate" disables="vbr_quality">Constant Bitrate</value>
-					<value xml:lang="pt_BR" value="0" enables="bitrate" disables="vbr_quality">Taxa de Bits Constante</value>
-					<value value="4" enables="vbr_quality" disables="bitrate">Variable Bitrate</value>
-					<value xml:lang="pt_BR" value="4" enables="vbr_quality" disables="bitrate">Taxa Variável de Bits</value>
-					<value value="3" enables="vbr_quality" disables="bitrate">Average Bitrate</value>
-					<value xml:lang="pt_BR" value="3" enables="vbr_quality" disables="bitrate">Taxa Média de Bits</value>
-				</possible-values>
-			</variable>
-			<variable id="vbr_quality">
-				<name>VBR Quality</name>
-				<name xml:lang="pt_BR">Qualidade VBR</name>
-				<control-type>slider</control-type>
-				<min-value>0</min-value>
-				<min-label>Worst</min-label>
-				<min-label xml:lang="pt_BR">Pior</min-label>
-				<max-value>9</max-value>
-				<max-label>Best</max-label>
-				<max-label xml:lang="pt_BR">Melhor</max-label>
-				<step-value>1</step-value>
-				<default-value>5</default-value>
-			</variable>
-			<variable id="bitrate">
-				<name>Bitrate</name>
-				<name xml:lang="pt_BR">Taxa de bits</name>
-				<control-type>combo</control-type>
-				<default-value>128</default-value>
-				<possible-values>
-					<value value="64">64 Kbps</value>
-					<value value="96">96 Kbps</value>
-					<value value="128">128 Kbps</value>
-					<value value="160">160 Kbps</value>
-					<value value="192">192 Kbps</value>
-					<value value="320">320 Kbps</value>
-				</possible-values>
-			</variable>
+			<element id="wav2mpeg" type="encoder">
+
+				<!-- mimetype of src pad, as input mimetype doesn't matter -->
+				<mimetype>audio/mpeg</mimetype>
+
+				<!-- gstms will try to find an element with all the given properties below.
+				If it doesn't find, just ignore the property, but if more then one gst-element
+				can be this element, the winner will be which has more properties existent.	-->
+				<property id="quality" type="combobox">
+					<choices default-value="5">
+						<choice value="0">Best Quality</choice>
+						<choice value="5">Default Quality</choice>
+						<choice value="9">Worst Quality</choice>
+					</choice>
+				</property>
+			</element>
+
+			<element id="vbrmuxer" type="optional">
+				<mimetype>audio/mpeg</mimetype>
+			</element>
+
+			<element id="id3mux" type="optional">
+				<mimetype>application/x-id3</mimetype>
+			</element>
+
 		</pipeline>
 	</audio-profile>
     
