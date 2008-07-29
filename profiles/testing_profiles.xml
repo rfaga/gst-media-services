@@ -11,10 +11,11 @@
 		<mimetype>audio/mpeg3</mimetype>
 
 		<process>
-			<element id="wav2mpeg" type="encoder">
-
+			<element id="raw2mpeg" type="encoder">
+				<recommended-element>lame</recommended-element>
+				<recommended-element>ffenc_mp3</recommended-element>
 				<!-- mimetype of src pad, as input mimetype doesn't matter -->
-				<mimetype>audio/mpeg</mimetype>
+				<source mpegversion="1" layer="3">audio/mpeg</source>
 
 				<!-- gstms will try to find an element with all the given properties below.
 				If it doesn't find, just ignore the property, but if more then one gst-element
@@ -29,11 +30,13 @@
 			</element>
 
 			<element id="vbrmuxer" type="optional">
-				<mimetype>audio/mpeg</mimetype>
+				<recommended-element>xingmux</recommended-element>
+				<source>audio/mpeg</source>
 			</element>
 
 			<element id="id3mux" type="optional">
-				<mimetype>application/x-id3</mimetype>
+				<recommended-element>id3v2mux</recommended-element>
+				<source>application/x-id3</source>
 			</element>
 
 		</process>

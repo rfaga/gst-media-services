@@ -30,8 +30,9 @@ AUDIO_TYPE = 2
 DATA_TYPE = 3
 
 
-
 FILE_SOURCE = "gnomevfssrc"
+
+################################# Misc #######################################
 
 class File(object):
     """
@@ -69,36 +70,16 @@ class File(object):
         self.mimetype = mimetype
         #print mimetype
 
-def get_profiles():
-    """
-    Get all possible profiles from XML databases.
-    """
-    #TODO: I need to read XMLs from the /usr/share folder (or some other system folder) and from a home folder (like ~/.gstms in UNIX-like)
-    HOME_PATH = os.path.expanduser("~/.gstms")
-    SYSTEM_PATH = "profiles/" #local path, same of source file, for now...
 
-    profiles_path = os.listdir(SYSTEM_PATH)
-    profiles = []
-    for path in profiles_path:
-        fullpath = os.path.join(os.path.abspath("."), path)
-        try:
-            doc = xmldom.parse(fullpath)
-        except:
-            error("file %s doesn't exist"%fullpath)
+def error(message):
+    print "error: %s"%message
 
-        try:
-            possible_profiles = doc.firstChild.childNodes
-            for profile in possible_profiles:
-                #if node is a child
-                if profile.nodeType == 1:
-                    profiles += [Profile(profile)]
-        except:
-            error("xml file at '%s' is not in EncodingProfiles format"%fullpath)
-
-#TODO: Parse string data into profiles
+################################ Registry ####################################
 
 
 
+
+########################### XML Profile Parser ###############################
 class Profile(object):
     """
     A profile class, with helpful properties and methods.
@@ -124,17 +105,59 @@ class Profile(object):
             self.type = AUDIO_TYPE
         elif xmlnode.nodeName == "video-profile":
             self.type = VIDEO_TYPE
-        
-        self.name = xmlnode.getElementsByTagName("name")[0].nodeValue
-        self.description = xmlnode.getElementsByTagName("description")[0].nodeValue
-        self.output_file_extension = xmlnode.getElementsByTagName("output-file-extension")[0].nodeValue
+
+        self.id = xmlnode.getAttribute("id")
+        self.name = xmlnode.getElementsByTagName("name")[0].firstChild.nodeValue
+        self.description = xmlnode.getElementsByTagName("description")[0].firstChild.nodeValue
+        self.output_file_extension = xmlnode.getElementsByTagName("output-file-extension")[0].firstChild.nodeValue
+        for node in xmlnode.getElementsByTagName("mimetype"):
+            self.mimetypes += [node.firstChild.nodeValue]
+
+        process = xmlnode.getElementsByTagName("process")[0]
+        elements = process.childNodes
+        for e in elements:
+            element = self.probe_element(e)
+
+    def probe_element(self, element):
+        """
+        element -- element to be probed
+        """
+        #TODO: probeargs element
+        return element
 
 
     #XXX: In the future, do a write method to write a profile into a file, so editing is easier.
 
 
-def error(message):
-    print "error: "%message
+def get_profiles():
+    """
+    Get all possible profiles from XML databases.
+    """
+    #TODO: I need to read XMLs from the /usr/share folder (or some other system folder) and from a home folder (like ~/.gstms in UNIX-like)
+    HOME_PATH = os.path.expanduser("~/.gstms")
+    SYSTEM_PATH = "profiles/" #local path, same of source file, for now...
+
+    profiles_path = os.listdir(SYSTEM_PATH)
+    profiles = []
+    for path in profiles_path:
+        fullpath = os.path.join(os.path.abspath(SYSTEM_PATH), path)
+        try:
+            doc = xmldom.parse(fullpath)
+        except:
+            error("file %s is not a valid XML file"%fullpath)
+            continue
+
+        try:
+            possible_profiles = doc.firstChild.childNodes
+            for profile in possible_profiles:
+                #if node is a child
+                if profile.nodeType == 1:
+                    profiles += [Profile(profile)]
+        except:
+            error("xml file at '%s' is not in EncodingProfiles format"%fullpath)
+
+#TODO: Parse string data into profiles
+    return profiles
 
 
 ##################### UNUSED CODE #######################
