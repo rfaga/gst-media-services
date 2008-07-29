@@ -27,11 +27,22 @@
 						<choice value="9">Worst Quality</choice>
 					</choices>
 				</property>
+				<property id="bitrate" type="combobox" condition="not(exist(raw2mpeg.quality))">
+					<choices default-value="128">
+						<choice value="8">Worst quality</choice>
+						<choice value="32">Low quality</choice>
+						<choice value="64">Bad quality</choice>
+						<choice value="128">Standard quality</choice>
+						<choice value="192">Good quality</choice>
+						<choice value="256">High quality</choice>
+						<choice value="320">Best quality</choice>
+					</choices>
+				</property>
 			</element>
 
-			<element id="vbrmuxer" type="optional">
+			<element id="vbrmuxer" type="optional" condition="not(exist(raw2mpeg.bitrate))">
 				<recommended-element>xingmux</recommended-element>
-				<source>audio/mpeg</source>
+				<source mpegversion="1" layer="3">audio/mpeg</source>
 			</element>
 
 			<element id="id3mux" type="optional">
