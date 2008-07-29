@@ -69,28 +69,34 @@ class File(object):
         self.mimetype = mimetype
         #print mimetype
 
-def get_all_xmls():
-    #TODO: I need to read XMLs from the /usr/share folder (a system folder) and from a home folder (like ~/.gstms in UNIX-like)
-    HOME_PATH = os.path.expanduser("~/.gstms")
-    SYSTEM_PATH = "profiles/" #local path, same of source file, for now...
-
-    profiles_path = os.listdir(SYSTEM_PATH)
-    for path in profiles_path:
-        doc = xmldom.parse(os.path.join(os.path.abspath("."), path))
-
-    
-
-    
-
 def get_profiles():
     """
     Get all possible profiles from XML databases.
     """
-#TODO: Get all XML data into a string, concatenated
-    
+    #TODO: I need to read XMLs from the /usr/share folder (or some other system folder) and from a home folder (like ~/.gstms in UNIX-like)
+    HOME_PATH = os.path.expanduser("~/.gstms")
+    SYSTEM_PATH = "profiles/" #local path, same of source file, for now...
 
+    profiles_path = os.listdir(SYSTEM_PATH)
+    profiles = []
+    for path in profiles_path:
+        fullpath = os.path.join(os.path.abspath("."), path)
+        try:
+            doc = xmldom.parse(fullpath)
+        except:
+            error("file %s doesn't exist"%fullpath)
+
+        try:
+            possible_profiles = doc.firstChild.childNodes
+            for profile in possible_profiles:
+                #if node is a child
+                if profile.nodeType == 1:
+                    profiles += [Profile(profile)]
+        except:
+            error("xml file at '%s' is not in EncodingProfiles format"%fullpath)
 
 #TODO: Parse string data into profiles
+
 
 
 class Profile(object):
@@ -100,6 +106,7 @@ class Profile(object):
     """
 
     id = None
+    name = None
     output_file_extension = None
     elements_needed = []
     mimetypes = []
@@ -107,17 +114,27 @@ class Profile(object):
     variables = []
     type = DATA_TYPE
 
-    def __init__(self, id):
+    def __init__(self, xmlnode):
         """
         Constructor.
         
-        id -- id of a profile, the same of XML Profile.
+        xmlnode -- the node in dom format, from xml.dom library.
         """
-        self.id = id
+        if xmlnode.nodeName == "audio-profile":
+            self.type = AUDIO_TYPE
+        elif xmlnode.nodeName == "video-profile":
+            self.type = VIDEO_TYPE
+        
+        self.name = xmlnode.getElementsByTagName("name")[0].nodeValue
+        self.description = xmlnode.getElementsByTagName("description")[0].nodeValue
+        self.output_file_extension = xmlnode.getElementsByTagName("output-file-extension")[0].nodeValue
+
 
     #XXX: In the future, do a write method to write a profile into a file, so editing is easier.
 
 
+def error(message):
+    print "error: "%message
 
 
 ##################### UNUSED CODE #######################

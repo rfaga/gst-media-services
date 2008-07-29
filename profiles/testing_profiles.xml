@@ -2,9 +2,7 @@
 <media-profiles>
 	<audio-profile id="lame-mp3">
 		<name>MP3</name>
-		<name xml:lang="pt_BR">MP3</name>
 		<description>A proprietary and older, but also popular, lossy audio format that produces larger files at lower bitrates.</description>
-		<description xml:lang="pt_BR">Um formato de áudio proprietário e mais antigo, mas também popular e com poucas perdas que produz arquivos maiores com taxas de bits mais baixas.</description>
 		
 		<output-file-extension>mp3</output-file-extension>
 		
@@ -12,7 +10,7 @@
 		<mimetype>audio/mp3</mimetype>
 		<mimetype>audio/mpeg3</mimetype>
 
-		<pipeline>
+		<process>
 			<element id="wav2mpeg" type="encoder">
 
 				<!-- mimetype of src pad, as input mimetype doesn't matter -->
@@ -26,7 +24,7 @@
 						<choice value="0">Best Quality</choice>
 						<choice value="5">Default Quality</choice>
 						<choice value="9">Worst Quality</choice>
-					</choice>
+					</choices>
 				</property>
 			</element>
 
@@ -38,7 +36,7 @@
 				<mimetype>application/x-id3</mimetype>
 			</element>
 
-		</pipeline>
+		</process>
 	</audio-profile>
     
 	<video-profile>
@@ -50,10 +48,8 @@
 		
 		<mimetype>video/mpeg4</mimetype>
 		
-		<pipeline>
-			<process>
-			</process>
-		</pipeline>
+		<process>
+		</process>
 	
 	</video-profile>
 </media-profiles>
