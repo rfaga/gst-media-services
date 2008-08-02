@@ -6,16 +6,12 @@
 		
 		<output-file-extension>mp3</output-file-extension>
 		
-		
-		<mimetype>audio/mp3</mimetype>
-		<mimetype>audio/mpeg3</mimetype>
-
 		<process>
 			<element id="raw2mpeg" type="encoder">
 				<recommended-element>lame</recommended-element>
 				<recommended-element>ffenc_mp3</recommended-element>
-				<!-- mimetype of src pad, as input mimetype doesn't matter -->
-				<source mpegversion="1" layer="3">audio/mpeg</source>
+				<!-- caps of src pad, as input caps doesn't matter -->
+				<source>audio/mpeg, mpegversion=(int)1, layer=(int)3</source>
 
 				<!-- gstms will try to find an element with all the given properties below.
 				If it doesn't find, just ignore the property, but if more then one gst-element
@@ -42,7 +38,7 @@
 
 			<element id="vbrmuxer" type="optional" condition="not(exist(raw2mpeg.bitrate))">
 				<recommended-element>xingmux</recommended-element>
-				<source mpegversion="1" layer="3">audio/mpeg</source>
+				<source>audio/mpeg, mpegversion=(int)1, layer=(int)3</source>
 			</element>
 
 			<element id="id3mux" type="optional">
