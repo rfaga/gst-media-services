@@ -29,6 +29,8 @@ VIDEO_TYPE = 1
 AUDIO_TYPE = 2
 DATA_TYPE = 3
 
+EMPTY = 'EMPTY'
+ANY = 'ANY'
 
 FILE_SOURCE = "gnomevfssrc"
 
@@ -76,8 +78,44 @@ def error(message):
 
 ################################ Registry ####################################
 
+class ElementFactory
+    def __init__(self, element_factory):
+        self.element_factory = element_factory
+        pads = element_factory.get_static_pad_templates()
+        if not pads:
+            return None
+        for pad in pads:
 
 
+
+    def check(self, sink, source):
+        
+
+registry = None
+
+def load_registry():
+    """
+    Init registry list. Returns False if it's already initialized.
+    """
+    global registry
+    if registry:
+        return False
+    #read registry only once
+    registry = gst.registry_get_default()
+    #read plugins from registry
+    plugins = registry.get_plugin_list()
+    
+    #build pad_template list
+    for plugin in plugins:
+        features = reg.get_feature_list_by_plugin(plugin.get_name())
+        for feature in features:
+            try:
+                element_factory = ElementFactory(feature)
+            except:
+                pass
+
+
+#load_registry()
 
 ########################### XML Profile Parser ###############################
 class Profile(object):
@@ -110,19 +148,36 @@ class Profile(object):
         self.name = xmlnode.getElementsByTagName("name")[0].firstChild.nodeValue
         self.description = xmlnode.getElementsByTagName("description")[0].firstChild.nodeValue
         self.output_file_extension = xmlnode.getElementsByTagName("output-file-extension")[0].firstChild.nodeValue
-        for node in xmlnode.getElementsByTagName("mimetype"):
-            self.mimetypes += [node.firstChild.nodeValue]
 
         process = xmlnode.getElementsByTagName("process")[0]
         elements = process.childNodes
         for e in elements:
             element = self.probe_element(e)
+            if not element:
 
-    def probe_element(self, element):
+
+    def probe_element(self, elementxml):
         """
-        element -- element to be probed
+        elementxml -- element to be probed, in XML format
+
+        return element in gstms.Element format
         """
-        #TODO: probeargs element
+        caps = elementxml.getElementsByTagName("source")[0].firstChild.nodeValue
+
+        #let's read recommended-elements, this can help our element finder
+        recommendedsxml = elementxml.getElementsByTagName("recommended-elements")
+        favorites = []
+        for r in recommendedsxml:
+            favorites += [r.firstChild.nodeValue]
+
+        #now we get the possible element in gstms.Element format.
+        # oh, and this element can be None if no element was found
+        element = get_possible_element(caps, favorites)
+        if not element:
+            return None
+        element.type = elementxml.getAttribute("type")
+
+        #TODO: parse properties options from elementxml
         return element
 
 
