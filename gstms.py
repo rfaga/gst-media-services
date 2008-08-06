@@ -19,7 +19,7 @@
 
 import gobject; gobject.threads_init()
 
-import gnomevfs, gst, os
+import gnomevfs, gst, os, sys
 from gst.extend.discoverer import Discoverer
 import time
 import xml.dom.minidom as xmldom
@@ -78,28 +78,71 @@ def error(message):
 
 ################################ Registry ####################################
 
-class ElementFactory
+class ElementFactory:
+    """
+    GSTMS Element Factory model, to use in a database of possible elements.
+    these possible elements can be used in pipeline.
+    """
+
     def __init__(self, element_factory):
         self.element_factory = element_factory
         pads = element_factory.get_static_pad_templates()
+        self.name = element_factory.get_name()
+        self.sinks = gst.caps_from_string(EMPTY)
+        self.sources = gst.caps_from_string(EMPTY)
         if not pads:
             return None
+
+        #now, for each pad template, classify as SINK or SOURCE
         for pad in pads:
+            if pad.direction == gst.PAD_SINK:
+                self.sinks.union(pad.get_caps())
+            elif pad.direction == gst.PAD_SRC:
+                self.sources.union(pad.get_caps())
+            #if, for any unknown reason, it is another type of direction, ignore it.
 
+    def check_klass(self, klass):
+        return klass in self.klass
 
+    def check(self, sink_caps, source_caps):
+        """
+        checks if this ElementFactory can generate a gst element for desired
+        pipeline
 
-    def check(self, sink, source):
-        
+        sink_caps -- sink caps which element must have, at least
+        source_caps -- source caps which elements must have, at least
+
+        returns True or False, if this EF can be used or not.
+        """
+        sink_condition, source_condition = False, False
+
+        #XXX: I'm not sure about this, but I can't see why uniting sinks with
+        # themselves can not work, as different sinks normally are different.
+
+        if sink_caps == EMPTY:
+            sink_condition = True
+        if self.sources.intersect(source_caps) != EMPTY:
+            source_condition = True
+
+        if source_caps == EMPTY:
+            source_condition = True
+        if self.sinks.intersect(sink_caps) != EMPTY:
+            sink_condition = True
+
+        return sink_condition and source_condition
 
 registry = None
 
 def load_registry():
     """
-    Init registry list. Returns False if it's already initialized.
+    Init registry list. 
     """
-    global registry
-    if registry:
-        return False
+    #XXX: Is reading all registry at start too much to process? Also, isn't so much to load on memory?
+    global registry, elements_factory
+    
+    #init elements_factory available for use
+    elements_factory = []
+
     #read registry only once
     registry = gst.registry_get_default()
     #read plugins from registry
@@ -107,15 +150,40 @@ def load_registry():
     
     #build pad_template list
     for plugin in plugins:
-        features = reg.get_feature_list_by_plugin(plugin.get_name())
+        features = registry.get_feature_list_by_plugin(plugin.get_name())
         for feature in features:
             try:
                 element_factory = ElementFactory(feature)
+                if element_factory:
+                    elements_factory += [element_factory]
             except:
                 pass
 
+load_registry()
 
-#load_registry()
+
+def get_possible_elements(sink_caps, source_caps, favorites):
+    """
+    get all possible elements, considering the caps and trying 
+    first the favorites
+
+    sink_caps -- sink caps
+    source_caps -- source caps
+    favorites -- what are the favorites elements
+
+    returns a list of possible elements, considering the order as the best
+    option in first place and worst in last.
+    """
+    possible_list = []
+    for ef in elements_factory:
+        if ef.check(sink_caps, source_caps):
+            possible_list += [ef]
+    for pe in possible_list:
+        if pe.name in favorites:
+            possible_list.remove(pe)
+            possible_list.insert(0, pe)
+
+    return possible_list
 
 ########################### XML Profile Parser ###############################
 class Profile(object):
@@ -154,7 +222,7 @@ class Profile(object):
         for e in elements:
             element = self.probe_element(e)
             if not element:
-
+               error("no element found for '%s'"%self.name)
 
     def probe_element(self, elementxml):
         """
@@ -162,7 +230,8 @@ class Profile(object):
 
         return element in gstms.Element format
         """
-        caps = elementxml.getElementsByTagName("source")[0].firstChild.nodeValue
+        source_caps = elementxml.getElementsByTagName("source")[0].firstChild.nodeValue
+        sink_caps = elementxml.getElementsByTagName("sink")[0].firstChild.nodeValue
 
         #let's read recommended-elements, this can help our element finder
         recommendedsxml = elementxml.getElementsByTagName("recommended-elements")
@@ -172,13 +241,15 @@ class Profile(object):
 
         #now we get the possible element in gstms.Element format.
         # oh, and this element can be None if no element was found
-        element = get_possible_element(caps, favorites)
-        if not element:
+        elements = get_possible_elements(sink_caps, source_caps, favorites)
+        if not elements:
             return None
-        element.type = elementxml.getAttribute("type")
-
+        
+        #element.type = elementxml.getAttribute("type")
+        #TODO: store the possible_elements list to try each one
+        
         #TODO: parse properties options from elementxml
-        return element
+        return elements[0]
 
 
     #XXX: In the future, do a write method to write a profile into a file, so editing is easier.
@@ -209,9 +280,8 @@ def get_profiles():
                 if profile.nodeType == 1:
                     profiles += [Profile(profile)]
         except:
-            error("xml file at '%s' is not in EncodingProfiles format"%fullpath)
-
-#TODO: Parse string data into profiles
+            error("xml file at '%s' is not in EncodingProfiles format. \n\
+                    Python error: '%s'"%(fullpath, str(sys.exc_info()[0]))
     return profiles
 
 
