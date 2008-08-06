@@ -7,10 +7,20 @@
 		<output-file-extension>mp3</output-file-extension>
 		
 		<process>
-			<element id="raw2mpeg" type="encoder">
+            <element id="raw2mpeg" type="required">
+
+                <!-- recommended-elements and category works like hints for 
+                required elements. Program will build a list of possible 
+                elements for this xml element, and the recommended elements 
+                will be the first of this list, followed by which fits on 
+                these categories. -->
 				<recommended-element>lame</recommended-element>
-				<recommended-element>ffenc_mp3</recommended-element>
-				<!-- caps of src pad, as input caps doesn't matter -->
+                <recommended-element>ffenc_mp3</recommended-element>
+
+                <klass>encoder</klass>
+                <klass>audio</klass>
+
+                <sink>ANY</sink>
 				<source>audio/mpeg, mpegversion=(int)1, layer=(int)3</source>
 
 				<!-- gstms will try to find an element with all the given properties below.
@@ -38,14 +48,26 @@
 
 			<element id="vbrmuxer" type="optional" condition="not(exist(raw2mpeg.bitrate))">
 				<recommended-element>xingmux</recommended-element>
+				<sink>audio/mpeg, mpegversion=(int)1, layer=(int)3</sink>
 				<source>audio/mpeg, mpegversion=(int)1, layer=(int)3</source>
 			</element>
 
 			<element id="id3mux" type="optional">
 				<recommended-element>id3v2mux</recommended-element>
+				<recommended-element>id3mux</recommended-element>
+				<sink>audio/mpeg, mpegversion=(int)1, layer=(int)3</sink>
 				<source>application/x-id3</source>
-			</element>
+            </element>
 
+            <pipeline>
+                <link origin="start" destiny="raw2mpeg" />
+                <link origin="raw2mpeg" destiny="vbrmuxer" condition="exist(vbrmuxer)"/>
+                <link origin="vbrmuxer" destiny="id3mux" condition="exist(vbrmuxer)"/>
+                <link origin="raw2mpeg" destiny="id3mux" condition="not(exist(vbrmuxer))"/>
+                <link origin="id3mux" destiny="end" condition="exist(id3mux)" />
+                <link origin="vbrmuxer" destiny="end" condition="and(exist(vbrmuxer),not(exist(id3mux)))" />
+                <link origin="raw2mpeg" destiny="end" condition="not(or(exist(vbrmuxer),exist(id3mux)))" />
+            </pipeline>
 		</process>
 	</audio-profile>
     
