@@ -39,7 +39,7 @@ EMPTY = gst.caps_from_string('EMPTY')
 ANY = 'ANY'
 
 FILE_SOURCE = "gnomevfssrc"
-DECODEBIN = "decodebin2"
+DECODEBIN = "decodebin"
 ################################# Misc #######################################
 
 class File(object):
@@ -394,6 +394,7 @@ class Transcoder(Pipeline):
 
         self.audioconvert = gst.element_factory_make("audioconvert", "audioconvert")
         self.audiosink = gst.element_factory_make("fakesink", "audiosink")
+        
 
         self.pipeline.add(self.filesource, self.audioconvert, self.audiosink)
         
@@ -401,16 +402,18 @@ class Transcoder(Pipeline):
         self.updater = None
 
     def new_decoded_pad(self, decodebin, pad, last):
-        #print "decoded! %s"%pad.get_caps().to_string()
+        print "decoded! %s"%pad.get_caps().to_string()
         #pad.link(self.sink)
         spad = self.audioconvert.get_static_pad("sink")
-        if pad.get_caps().intersect(spad.get_caps()) != "EMPTY":
-            pad.link(spad)
-        else:
-            fs = gst.element_factory_make("fakesink", "fksink")
-            self.pipeline.add(fs)
-            spad = fs.get_static_pad("sink")
-            pad.link(spad)
+        if (not spad.is_linked()) and pad.get_caps().intersect(spad.get_caps()) != "EMPTY":
+                pad.link(spad)
+        #else:
+        #    fs = gst.element_factory_make("fakesink", "fksink")
+        #    self.pipeline.add(fs)
+        #    spad = fs.get_static_pad("sink")
+        #    pad.link(spad)
+        #    self.fakesinks += [fs]
+
         self.pads += [(pad, spad)]
 
     def play_file(self, file_path):
@@ -420,7 +423,7 @@ class Transcoder(Pipeline):
         self.pipeline.add(self.decode)
 
         self.filesource.link(self.decode)
-        
+        self.fakesinks = []
         self.pads = []
         self.play()
 
@@ -430,6 +433,9 @@ class Transcoder(Pipeline):
         for pad, spad in self.pads:
             pad.unlink(spad)
         self.filesource.unlink(self.decode)
+        if self.fakesinks:
+            self.pipeline.remove(*self.fakesinks)
+        del self.pads, self.fakesinks
         #self.decode.disconnect("new-decoded-pad")
         del self.decode
         if self.updater:
