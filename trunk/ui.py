@@ -84,6 +84,9 @@ class InputObject(gstms.File):
             tag = "unknow"
         return "(%s) %s"%(tag, self.uri)
 
+    def get_path(self):
+        return self.uri
+
 
 class FileList(object):
     """
@@ -125,6 +128,33 @@ class FileList(object):
         for row in rows:
             self.model.remove(self.model.get_iter(row))
 
+    def get_files_path(self):
+        """
+        return all file paths of current list
+        """
+        files_path = []
+        for row in self.model:
+            files_path += [row[1].get_path()]
+        return files_path
+
+class ProfileList:
+    def __init__(self, widget, profiles):
+        """
+        Starts a Profile Rendered list.
+        
+        widget -- ComboBox widget
+        profiles_list -- a python list of gstms.Profiles objects
+        """
+        self.widget = widget
+        #self.profiles = profiles
+        self.model = gtk.ListStore(gobject.TYPE_STRING, gobject.TYPE_PYOBJECT)
+        self.widget.set_model(self.model)
+        for profile in profiles:
+            self.model.append((str(profile), profile))
+
+    def get_selected(self):
+        #return self.widget.get_selection().get_selected_rows()[1][0]
+        return self.model[self.widget.get_active()][1]
 
 class MainDialog:
     def __init__(self, *category):
@@ -153,8 +183,16 @@ class MainDialog:
         self.area_subtitle = widgets.get_widget("hbox_subtitle")
         self.area_target = widgets.get_widget("hbox_target")
 
+        self.combo_audio = widgets.get_widget("combobox_audio")
+        self.combo_video = widgets.get_widget("combobox_video")
+        self.combo_subtitle = widgets.get_widget("combobox_subtitle")
+
         self.button_transcode = widgets.get_widget("button_transcode")
         self.button_ok = widgets.get_widget("button_ok")
+        self.button_cancel = widgets.get_widget("button_cancel")
+        self.button_config = widgets.get_widget("button_profileeditor")
+        self.button_open = widgets.get_widget("button_open")
+        self.button_close = widgets.get_widget("button_close")
         
         self.dialog_preferences = widgets.get_widget("dialog_preferences")
        
@@ -170,6 +208,9 @@ class MainDialog:
         
         widgets.signal_autoconnect(self)
         self.dialog.show()
+        audio_profiles, video_profiles = gstms.get_profiles()
+        self.audioprofiles = ProfileList(self.combo_audio, audio_profiles)
+        self.videoprofiles = ProfileList(self.combo_video, video_profiles)
 
     ### Catching signals ###
 
@@ -185,6 +226,14 @@ class MainDialog:
     def on_button_remove_clicked(self, widget):
         self.filelist.remove_files()
 
+    def on_button_transcode_clicked(self, widget):
+        self.profile = self.current_profile()
+        #profile.transcode(self.update_progressbar)
+        self.worklist = self.filelist.get_files_path()
+        if self.worklist:
+            self.button_transcode.set_property("sensitive", False)
+            self.profile.transcode(self.worklist.pop(0), self.updater)
+
     ### Operations ###
 
     def add_files(self, files):
@@ -194,5 +243,31 @@ class MainDialog:
         thread.start_new_thread(self.filelist.add_files, (files,))
         #self.filelist.add_files(files)
 
-main = MainDialog(PIPELINE_ONLY)
+    def current_profile(self):
+        """
+        return current selected profiles, in gstms.Profile formats
+        """
+        if self.area_audio.get_property("visible"):
+            return self.audioprofiles.get_selected()
+        elif self.area_video.get_property("visible"):
+            return self.videoprofiles.get_selected()
+        else:
+            print "Error: no profile is able to use conversion"
+   
+    def updater(self, message, fraction=0.0):
+        self.update_progressbar(fraction)
+        if message == gstms.CONVERSION_FINISHED:
+            if self.worklist:
+                print "now going to next file '%s'"%self.worklist[0]
+                self.profile.transcode(self.worklist.pop(0), self.updater)
+            else:
+                self.button_transcode.set_property("visible", False)
+                self.button_cancel.set_property("visible", False)
+                self.button_config.set_property("visible", False)
+                self.button_close.set_property("visible", True)
+                self.button_open.set_property("visible", True)
+
+    def update_progressbar(self, fraction):
+        print fraction
+main = MainDialog()
 gtk.main()

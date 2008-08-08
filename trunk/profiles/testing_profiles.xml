@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<media-profiles>
+<media-profiles version="1.0">
 	<audio-profile id="lame-mp3">
 		<name>MP3</name>
 		<description>A proprietary and older, but also popular, lossy audio format that produces larger files at lower bitrates.</description>
@@ -54,7 +54,6 @@
 
 			<element id="id3mux" type="optional">
 				<recommended-element>id3v2mux</recommended-element>
-				<recommended-element>id3mux</recommended-element>
 				<sink>audio/mpeg, mpegversion=(int)1, layer=(int)3</sink>
 				<source>application/x-id3</source>
             </element>
@@ -70,7 +69,7 @@
             </pipeline>
 		</process>
 	</audio-profile>
-    
+    <!-- taking this video-profile off, for now 
 	<video-profile>
 		<name>XviD (MPEG-4 ISO format)</name>
 		<description>A video profile</description>
@@ -83,5 +82,6 @@
 		<process>
 		</process>
 	
-	</video-profile>
+    </video-profile>
+    -->
 </media-profiles>
