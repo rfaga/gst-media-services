@@ -230,9 +230,7 @@
                 <child>
                   <widget class="GtkComboBoxEntry" id="combobox_video">
                     <property name="visible">True</property>
-                    <property name="items" translatable="yes">No Video (if no video is inputed)
-iPod format
-DivX format
+                    <property name="items" translatable="yes">
 
 </property>
                     <child internal-child="entry">
@@ -268,6 +266,7 @@ DivX format
             </child>
             <child>
               <widget class="GtkHBox" id="hbox_audio">
+                <property name="visible">True</property>
                 <property name="spacing">10</property>
                 <child>
                   <widget class="GtkLabel" id="label_outaudio">
@@ -283,9 +282,7 @@ DivX format
                 <child>
                   <widget class="GtkComboBoxEntry" id="combobox_audio">
                     <property name="visible">True</property>
-                    <property name="items" translatable="yes">No Audio(but changes to automatically what video profile says)
-MP3 format
-OGG format</property>
+                    <property name="items" translatable="yes"></property>
                     <child internal-child="entry">
                       <widget class="GtkEntry" id="comboboxentry-entry2">
                       </widget>
@@ -334,8 +331,7 @@ OGG format</property>
                 <child>
                   <widget class="GtkComboBoxEntry" id="combobox_subtitle">
                     <property name="visible">True</property>
-                    <property name="items" translatable="yes">SRT
-DVD</property>
+                    <property name="items" translatable="yes"></property>
                     <child internal-child="entry">
                       <widget class="GtkEntry" id="comboboxentry-entry3">
                       </widget>
@@ -467,6 +463,7 @@ DVD</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="response_id">0</property>
+                <signal name="clicked" handler="on_button_transcode_clicked"/>
                 <child>
                   <widget class="GtkAlignment" id="alignment2">
                     <property name="visible">True</property>
@@ -568,7 +565,6 @@ DVD</property>
             </child>
             <child>
               <widget class="GtkButton" id="button_ok">
-                <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="can_default">True</property>
                 <property name="label">gtk-ok</property>
@@ -650,8 +646,8 @@ DVD</property>
             <property name="width_request">480</property>
             <property name="height_request">320</property>
             <property name="visible">True</property>
-            <property name="local_only">False</property>
             <property name="select_multiple">True</property>
+            <property name="local_only">False</property>
           </widget>
           <packing>
             <property name="position">1</property>
