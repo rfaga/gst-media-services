@@ -62,10 +62,11 @@
                 <link origin="start" destiny="raw2mpeg" />
                 <link origin="raw2mpeg" destiny="vbrmuxer" condition="exist(vbrmuxer)"/>
                 <link origin="vbrmuxer" destiny="id3mux" condition="exist(vbrmuxer)"/>
-                <link origin="raw2mpeg" destiny="id3mux" condition="not(exist(vbrmuxer))"/>
+				<!--<link origin="raw2mpeg" destiny="id3mux" condition="not(exist(vbrmuxer))"/>-->
                 <link origin="id3mux" destiny="end" condition="exist(id3mux)" />
-                <link origin="vbrmuxer" destiny="end" condition="and(exist(vbrmuxer),not(exist(id3mux)))" />
-                <link origin="raw2mpeg" destiny="end" condition="not(or(exist(vbrmuxer),exist(id3mux)))" />
+				<!--<link origin="vbrmuxer" destiny="end" condition="and(exist(vbrmuxer),not(exist(id3mux)))" />
+				<link origin="raw2mpeg" destiny="end" condition="not(or(exist(vbrmuxer),exist(id3mux)))" />
+				-->
             </pipeline>
 		</process>
 	</audio-profile>

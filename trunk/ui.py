@@ -18,7 +18,7 @@
 ###############################################################################
 
 import gstms
-import gtk, gtk.glade
+import gtk, gtk.glade, gnomevfs
 import gobject
 import thread
 
@@ -68,7 +68,7 @@ class InputObject(gstms.File):
         uri -- URI path, based in GnomeVFS
         """
         self.model = model
-        gstms.File.__init__(self, uri)
+        gstms.File.__init__(self, gnomevfs.get_local_path_from_uri(uri))
     
     def on_discover(self, discover, success):
         gstms.File.on_discover(self, discover, success)
@@ -82,10 +82,10 @@ class InputObject(gstms.File):
             tag = "audio"
         else:
             tag = "unknow"
-        return "(%s) %s"%(tag, self.uri)
+        return "(%s) %s"%(tag, self.path)
 
     def get_path(self):
-        return self.uri
+        return self.path
 
 
 class FileList(object):
@@ -231,6 +231,7 @@ class MainDialog:
         #profile.transcode(self.update_progressbar)
         self.worklist = self.filelist.get_files_path()
         if self.worklist:
+            print "now going to next file '%s'"%self.worklist[0]
             self.button_transcode.set_property("sensitive", False)
             self.profile.transcode(self.worklist.pop(0), self.updater)
 

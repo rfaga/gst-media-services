@@ -19,11 +19,10 @@
 
 import gobject; gobject.threads_init()
 
-import gnomevfs, gst, os, sys
+import gst, os, sys
 from gst.extend.discoverer import Discoverer
 import time
 import xml.dom.minidom as xmldom
-
 
 #media types
 VIDEO_TYPE = 1
@@ -38,8 +37,10 @@ CONVERSION_RUNNING = 33
 EMPTY = gst.caps_from_string('EMPTY')
 ANY = 'ANY'
 
-FILE_SOURCE = "gnomevfssrc"
+FILE_SOURCE = "filesrc"
+FILE_SINK = "filesink"
 DECODEBIN = "decodebin"
+
 ################################# Misc #######################################
 
 class File(object):
@@ -47,14 +48,14 @@ class File(object):
     A Media object, a file object with its properties
     """
 
-    def __init__(self, uri):
+    def __init__(self, path):
         """
         Constructor.
         
-        uri -- file uri
+        path -- file path
         """
-        self.uri = uri
-        self.decoder = Discoverer(gnomevfs.get_local_path_from_uri(uri))
+        self.path = path
+        self.decoder = Discoverer(path)
         self.decoder.connect("discovered", self.on_discover)
         self.decoder.discover()
         self.mimetype = None
@@ -176,7 +177,7 @@ def load_registry():
 load_registry()
 
 
-def get_possible_elements(sink_caps, source_caps, favorites, klasses):
+def get_possible_elements(sink_caps, source_caps, favorites, klasses, elements_list=elements_factory):
     """
     get all possible elements, considering the caps and trying 
     first the favorites
@@ -184,13 +185,15 @@ def get_possible_elements(sink_caps, source_caps, favorites, klasses):
     sink_caps -- sink caps
     source_caps -- source caps
     favorites -- what are the favorites elements
+    klasses -- gst klasses which elements must be
+    elements_list -- list of possible elements to test
 
     returns a list of possible elements, considering the order as the best
     option in first place and worst in last.
     """
     possible_list = []
     favorites.sort(None,None,True) #reverse sort
-    for ef in elements_factory:
+    for ef in elements_list:
         if ef.check(sink_caps, source_caps, klasses):
             possible_list += [ef]
     for pe in possible_list:
@@ -233,18 +236,21 @@ class Profile:
         self.description = xmlnode.getElementsByTagName("description")[0].firstChild.nodeValue
         self.output_file_extension = xmlnode.getElementsByTagName("output-file-extension")[0].firstChild.nodeValue
 
-        self.elements = {}
+        self.elements = []
         elementsxml= xmlnode.getElementsByTagName("element")
         for e in elementsxml:
             element = self.probe_element(e)
             if not element:
                error("no element found for '%s'"%e.getAttribute("id"))
             else:
-                self.elements.update({element.name: element})
+                element.name = e.getAttribute("id")
+                self.elements += [element]
 
-        #TODO: construct pipeline conversion
-        self.transcoder = Transcoder(self.id)
-        
+        #TODO: check conditions to link or not
+        self.links = []
+        linksxml= xmlnode.getElementsByTagName("link")
+        for link in linksxml:
+            self.links += [ ( link.getAttribute("origin") , link.getAttribute("destiny") ) ]
 
     def probe_element(self, elementxml):
         """
@@ -282,8 +288,10 @@ class Profile:
         return self.name
 
     def transcode(self, file_path, updater=None):
-        self.transcoder.updater = updater
-        self.transcoder.play_file(file_path)
+        transcode = Transcode(self.id, self.elements, self.links, updater)
+        #TODO: correct destiny
+        transcode.convert_file(file_path, \
+                file_path[:file_path.rfind(".")]+"."+self.output_file_extension)
 
     #XXX: In the future, do a write method to write a profile into a file, so editing will be easier.
 
@@ -348,7 +356,7 @@ class Pipeline:
             #print message.parse_eos()
             self.finish()
         elif t == gst.MESSAGE_STATE_CHANGED:
-            #print message.parse_state_changed()
+            #print "CHANGED: ",message.parse_state_changed()
             pass
         
         elif t == gst.MESSAGE_ERROR:
@@ -386,61 +394,91 @@ class Pipeline:
         #implement it!
         pass
 
-class Transcoder(Pipeline):
+# I don't like the idea of probing raw converters, as I can get some filter
+# element which changes something of original stream
+RAW_CONVERTERS = [
+        ElementFactory(gst.element_factory_find("ffmpegcolorspace")),
+        ElementFactory(gst.element_factory_find("audioconvert"))]
 
-    def __init__(self, name):
+class Transcode(Pipeline):
+
+    def __init__(self, name, elements_list, links, updater=None):
+        """
+        Generates a transcode object, capable to transcode a media file 
+        according to elements and link given
+
+        name -- a string name to the object, must be unique
+        elements_list -- list of gstms.ElementFactory to be used to convert
+        links - tuple of pairs, containing source and sink of connections
+        """
         Pipeline.__init__(self, name)
         self.filesource = gst.element_factory_make(FILE_SOURCE, "filesource")
-
-        self.audioconvert = gst.element_factory_make("audioconvert", "audioconvert")
-        self.audiosink = gst.element_factory_make("fakesink", "audiosink")
-        
-
-        self.pipeline.add(self.filesource, self.audioconvert, self.audiosink)
-        
-        gst.element_link_many(self.audioconvert, self.audiosink)
-        self.updater = None
-
-    def new_decoded_pad(self, decodebin, pad, last):
-        print "decoded! %s"%pad.get_caps().to_string()
-        #pad.link(self.sink)
-        spad = self.audioconvert.get_static_pad("sink")
-        if (not spad.is_linked()) and pad.get_caps().intersect(spad.get_caps()) != "EMPTY":
-                pad.link(spad)
-        #else:
-        #    fs = gst.element_factory_make("fakesink", "fksink")
-        #    self.pipeline.add(fs)
-        #    spad = fs.get_static_pad("sink")
-        #    pad.link(spad)
-        #    self.fakesinks += [fs]
-
-        self.pads += [(pad, spad)]
-
-    def play_file(self, file_path):
-        self.filesource.set_property("location", file_path)
         self.decode = gst.element_factory_make(DECODEBIN, "decodebin")
         self.decode.connect("new-decoded-pad", self.new_decoded_pad)
-        self.pipeline.add(self.decode)
-
+        self.pipeline.add(self.filesource, self.decode)
         self.filesource.link(self.decode)
-        self.fakesinks = []
-        self.pads = []
+
+        self.filesink = gst.element_factory_make(FILE_SINK, "filesink")
+        elements = {}
+        elements.update( {"end": self.filesink})
+        for e in elements_list:
+            elements.update( {e.name: e.element_factory.create()} )
+        self.pipeline.add(*elements.values())
+
+        self.starts = []
+        for (source, destiny) in links:
+            if source == "start":
+                pad = elements[destiny].get_static_pad("sink")
+                self.starts += [(elements[destiny], pad)]
+            else:
+                try:
+                    elements[source].link(elements[destiny])
+                except:
+                    error("element '%s' couldn't link to '%s'"%(source, destiny))
+        self.updater = updater
+
+    def new_decoded_pad(self, decodebin, pad, last):
+        #print "decoded! %s"%pad.get_caps().to_string()
+
+        for element, spad in self.starts:
+            conv = get_possible_elements(pad.get_caps(), spad.get_caps() ,\
+                    RAW_CONVERTERS, [], RAW_CONVERTERS)
+            if not conv:
+                return
+            conv = conv[0].element_factory.create()
+            self.pipeline.add(conv)
+
+            cpad = conv.get_static_pad("src")
+            cpad.link(spad)            
+
+            cpad = conv.get_static_pad("sink")
+            pad.link(cpad)
+            
+            self.starts.remove((element, spad))
+
+            #XXX: code below is helping debug
+            for i in self.pipeline.elements():
+                for p in i.src_pads():
+                    print p.is_linked()
+                    if not p.is_linked():
+                        print "not_linked source: ",i, p.get_caps().to_string()
+                for p in i.sink_pads():
+                    print p.is_linked()
+                    if not p.is_linked():
+                        print "not_linked sink: ",i, p.get_caps().to_string()
+
+    def convert_file(self, file_source, file_destiny):
+        self.filesource.set_property("location", file_source)
+        self.filesink.set_property("location", file_destiny)
         self.play()
 
     def finish(self):
         self.stop()
-        self.pipeline.remove(self.decode)
-        for pad, spad in self.pads:
-            pad.unlink(spad)
-        self.filesource.unlink(self.decode)
-        if self.fakesinks:
-            self.pipeline.remove(*self.fakesinks)
-        del self.pads, self.fakesinks
-        #self.decode.disconnect("new-decoded-pad")
-        del self.decode
+        print "***** File finished *****"
         if self.updater:
             self.updater(CONVERSION_FINISHED)
 
-#import gtk
-#t = Transcode("a"); t.play_file("/home/faga/video.wmv")
+#import gtk, sys
+#file = sys.argv[-1]
+#t = Transcoder("a"); t.play_file(file)
 #gtk.main()
