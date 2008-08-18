@@ -20,7 +20,7 @@
 import gstms
 import gtk, gtk.glade, gnomevfs
 import gobject
-import thread
+import thread, sys
 
 GLADE_PATH = "convert_anything.glade"
 
@@ -31,6 +31,7 @@ TARGET_OFF = 3
 
 widgets = gtk.glade.XML(GLADE_PATH)
 
+args = sys.argv[1:]
 
 class FileChooserDialog:
     def __init__(self, parent):
@@ -72,7 +73,9 @@ class InputObject(gstms.File):
     
     def on_discover(self, discover, success):
         gstms.File.on_discover(self, discover, success)
-        self.model.append((str(self), self))
+        repr = self.__str__()
+        if repr:
+            self.model.append((str(self), self))
 
     def __str__(self):
         #TODO: this method should show it's representation to the file list
@@ -80,7 +83,10 @@ class InputObject(gstms.File):
             tag = "video"
         elif self.mediatype == gstms.AUDIO_TYPE:
             tag = "audio"
+        elif self.mediatype == gstms.IMAGE_TYPE:
+            tag = "image"
         else:
+            return None
             tag = "unknow"
         return "(%s) %s"%(tag, self.path)
 
@@ -112,6 +118,7 @@ class FileList(object):
         # create a column which uses markup
         column = gtk.TreeViewColumn("filename", renderer,  markup=0)
         self.widget.append_column(column)
+        self.add_files(args)
 
     def add_files(self, files):
         for f in files:
@@ -146,14 +153,12 @@ class ProfileList:
         profiles_list -- a python list of gstms.Profiles objects
         """
         self.widget = widget
-        #self.profiles = profiles
         self.model = gtk.ListStore(gobject.TYPE_STRING, gobject.TYPE_PYOBJECT)
         self.widget.set_model(self.model)
         for profile in profiles:
             self.model.append((str(profile), profile))
 
     def get_selected(self):
-        #return self.widget.get_selection().get_selected_rows()[1][0]
         return self.model[self.widget.get_active()][1]
 
 class MainDialog:
@@ -180,12 +185,12 @@ class MainDialog:
         self.area_input = widgets.get_widget("table_input")
         self.area_video = widgets.get_widget("hbox_video")
         self.area_audio = widgets.get_widget("hbox_audio")
-        self.area_subtitle = widgets.get_widget("hbox_subtitle")
+        self.area_image = widgets.get_widget("hbox_image")
         self.area_target = widgets.get_widget("hbox_target")
 
         self.combo_audio = widgets.get_widget("combobox_audio")
         self.combo_video = widgets.get_widget("combobox_video")
-        self.combo_subtitle = widgets.get_widget("combobox_subtitle")
+        self.combo_image = widgets.get_widget("combobox_image")
 
         self.button_transcode = widgets.get_widget("button_transcode")
         self.button_ok = widgets.get_widget("button_ok")
@@ -194,6 +199,9 @@ class MainDialog:
         self.button_open = widgets.get_widget("button_open")
         self.button_close = widgets.get_widget("button_close")
         
+        self.vbox_filelist = widgets.get_widget("vbox_filelist")
+        self.button_remove = widgets.get_widget("button_remove")
+
         self.dialog_preferences = widgets.get_widget("dialog_preferences")
        
         if PIPELINE_ONLY in self.category:
@@ -233,6 +241,7 @@ class MainDialog:
         if self.worklist:
             print "now going to next file '%s'"%self.worklist[0]
             self.button_transcode.set_property("sensitive", False)
+            self.vbox_filelist.set_property("visible", False)
             self.profile.transcode(self.worklist.pop(0), self.updater)
 
     ### Operations ###

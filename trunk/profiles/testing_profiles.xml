@@ -26,14 +26,15 @@
 				<!-- gstms will try to find an element with all the given properties below.
 				If it doesn't find, just ignore the property, but if more then one gst-element
 				can be this element, the winner will be which has more properties existent.	-->
-				<property id="quality" type="combobox">
+				<property id="quality" type="combobox" condition="property(raw2mpeg,quality)">
 					<choices default-value="5">
 						<choice value="0">Best Quality</choice>
 						<choice value="5">Default Quality</choice>
 						<choice value="9">Worst Quality</choice>
 					</choices>
 				</property>
-				<property id="bitrate" type="combobox" condition="not(exist(raw2mpeg.quality))">
+
+				<property id="bitrate" type="combobox" condition="property(raw2mpeg,quality)">
 					<choices default-value="128">
 						<choice value="8">Worst quality</choice>
 						<choice value="32">Low quality</choice>
@@ -46,7 +47,7 @@
 				</property>
 			</element>
 
-			<element id="vbrmuxer" type="optional" condition="not(exist(raw2mpeg.bitrate))">
+			<element id="vbrmuxer" type="optional" condition="property(raw2mpeg,vbr)">
 				<recommended-element>xingmux</recommended-element>
 				<sink>audio/mpeg, mpegversion=(int)1, layer=(int)3</sink>
 				<source>audio/mpeg, mpegversion=(int)1, layer=(int)3</source>
@@ -62,11 +63,10 @@
                 <link origin="start" destiny="raw2mpeg" />
                 <link origin="raw2mpeg" destiny="vbrmuxer" condition="exist(vbrmuxer)"/>
                 <link origin="vbrmuxer" destiny="id3mux" condition="exist(vbrmuxer)"/>
-				<!--<link origin="raw2mpeg" destiny="id3mux" condition="not(exist(vbrmuxer))"/>-->
+				<link origin="raw2mpeg" destiny="id3mux" condition="not(exist(vbrmuxer))"/>
                 <link origin="id3mux" destiny="end" condition="exist(id3mux)" />
-				<!--<link origin="vbrmuxer" destiny="end" condition="and(exist(vbrmuxer),not(exist(id3mux)))" />
+                <link origin="vbrmuxer" destiny="end" condition="and(exist(vbrmuxer),not(exist(id3mux)))" />
 				<link origin="raw2mpeg" destiny="end" condition="not(or(exist(vbrmuxer),exist(id3mux)))" />
-				-->
             </pipeline>
 		</process>
 	</audio-profile>
