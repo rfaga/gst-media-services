@@ -27,7 +27,8 @@ import xml.dom.minidom as xmldom
 #media types
 VIDEO_TYPE = 1
 AUDIO_TYPE = 2
-DATA_TYPE = 3
+IMAGE_TYPE = 3
+DATA_TYPE = 4
 
 #messages about conversion
 CONVERSION_FINISHED = 31
@@ -67,7 +68,10 @@ class File(object):
             #if ocurred an error, file is data file, unrecognized by discoverer
             pass
         if discover.is_video:
-            self.mediatype = VIDEO_TYPE
+            if discover.videolength == -1:
+                self.mediatype = IMAGE_TYPE
+            else:
+                self.mediatype = VIDEO_TYPE
         elif discover.is_audio:
             self.mediatype = AUDIO_TYPE
         else:
@@ -87,6 +91,21 @@ def error(message):
     print "error: %s"%message
 
 ################################ Registry ####################################
+
+class Property:
+    def __init__(self, id, type, default_value=None, possible_values=None):
+        self.id = id
+        self.type = type
+        self.default_value = default_value
+        self.possible_values = possible_values
+        self.value = default_value
+
+    def set_value(self, value):
+        self.value = value
+
+    def get_value(self):
+        return self.value
+
 
 class ElementFactory:
     """
@@ -111,6 +130,15 @@ class ElementFactory:
             elif pad.direction == gst.PAD_SRC:
                 self.sources = self.sources.union(pad.get_caps())
             #if, for any unknown reason, it is another type of direction, ignore it.
+        self.properties = {}
+
+    def load_possible_properties(self):
+        self.possible_properties = []
+        for p in gobject.list_properties(self.element_factory.create()):
+            self.possible_properties += [p.name]
+
+    def add_property(self, property):
+        self.properties.update({property.id: property})
 
     def check(self, sink_caps, source_caps, klasses):
         """
@@ -145,6 +173,12 @@ class ElementFactory:
             sink_condition = True
 
         return sink_condition and source_condition
+
+    def has_property(self, property):
+        """
+        returns if this element factory can generate some specific property
+        """
+        return property in self.possible_properties
 
 registry = None
 
@@ -230,31 +264,29 @@ class Profile:
             self.type = AUDIO_TYPE
         elif xmlnode.nodeName == "video-profile":
             self.type = VIDEO_TYPE
+        elif xmlnode.nodeName == "image-profile":
+            self.type = IMAGE_TYPE
 
         self.id = xmlnode.getAttribute("id")
         self.name = xmlnode.getElementsByTagName("name")[0].firstChild.nodeValue
         self.description = xmlnode.getElementsByTagName("description")[0].firstChild.nodeValue
         self.output_file_extension = xmlnode.getElementsByTagName("output-file-extension")[0].firstChild.nodeValue
 
-        self.elements = []
+        self.elements = {}
         elementsxml= xmlnode.getElementsByTagName("element")
         for e in elementsxml:
-            element = self.probe_element(e)
-            if not element:
-               error("no element found for '%s'"%e.getAttribute("id"))
-            else:
-                element.name = e.getAttribute("id")
-                self.elements += [element]
-
+            self.add_element(e)
         #TODO: check conditions to link or not
         self.links = []
         linksxml= xmlnode.getElementsByTagName("link")
         for link in linksxml:
-            self.links += [ ( link.getAttribute("origin") , link.getAttribute("destiny") ) ]
+            cond = link.getAttribute("condition")
+            if self.check_condition(cond):
+                self.links += [ ( link.getAttribute("origin") , link.getAttribute("destiny") ) ]
 
-    def probe_element(self, elementxml):
+    def add_element(self, elementxml):
         """
-        elementxml -- element to be probed, in XML format
+        elementxml -- element to be probed, in XML format. Then, add to self elements list
 
         return element in gstms.Element format
         """
@@ -276,22 +308,77 @@ class Profile:
         # oh, and this element can be None if no element was found
         elements = get_possible_elements(sink_caps, source_caps, favorites, klasses)
         if not elements:
-            return None
+            error("element '%s' from profile xml not found"%elementxml.getAttribute("id"))
+            return
         
         element = elements[0] #XXX: for now, the first of list is the chosen one
         element.type = elementxml.getAttribute("type")
+        element.load_possible_properties()
         
         #TODO: parse properties options from elementxml
+        
+        element.name = elementxml.getAttribute("id")
+        self.elements.update({element.name: element})
+        if not self.check_condition(elementxml.getAttribute("cond")):
+            self.elements.pop(element.name)
+            del element
+            return
+
+        for p in elementxml.getElementsByTagName("property"):
+            if self.check_condition(p.getAttribute("condition")):
+                choices = p.getElementsByTagName("choices")[0]
+                default_value = choices.getAttribute("default_value")
+                values = {}
+                for choice in choices.getElementsByTagName("choice"):
+                    values.update({choice.nodeValue: choice.getAttribute("value")})
+
+                element.add_property(Property(p.getAttribute("id"),\
+                        p.getAttribute("type"), default_value, values))
+
         return element
-    
+   
+    def check_condition(self, condition):
+        """
+        checks if condition is true or false.
+        """
+        index = condition.find("(")
+        func = condition[:index]
+        par = condition[index+1:-1].split(",")
+
+        if func == "element":
+            if self.elements.has_key(par[0].strip()):
+                return True
+            else:
+                return False
+
+        if func == "property":
+            if not self.elements.has_key(par[0].strip()):
+                error("element '%s', requested by profile xml, doesn't exist."%par[0])
+                return False
+            if self.elements[par[0].strip()].has_property(par[1].strip()):
+                return True
+            else:
+                return False
+                    
+        if func == "or":
+            return self.check_condition(par[0]) or self.check_condition(par[1])
+        if func == "and":
+            return self.check_condition(par[0]) and self.check_condition(par[1])
+        if func == "not":
+            return not self.check_condition(par[0])
+        else:
+            return True
+
     def __str__(self):
         return self.name
 
     def transcode(self, file_path, updater=None):
-        transcode = Transcode(self.id, self.elements, self.links, updater)
+        file_destiny = file_path[:file_path.rfind(".")]+"."+self.output_file_extension
+        transcode = Transcode(self.id, self.elements, self.links, file_path, file_destiny, updater)
         #TODO: correct destiny
-        transcode.convert_file(file_path, \
-                file_path[:file_path.rfind(".")]+"."+self.output_file_extension)
+        #time.sleep(1)
+        #transcode.convert_file(file_path, \
+        #        file_path[:file_path.rfind(".")]+"."+self.output_file_extension)
 
     #XXX: In the future, do a write method to write a profile into a file, so editing will be easier.
 
@@ -350,13 +437,18 @@ class Pipeline:
         Message from bus!
         """
         t = message.type
-        #print "Incoming message! - '%s'"%t
+        #print "msg: '%s'"%t,
         # If process ended
         if t == gst.MESSAGE_EOS:
             #print message.parse_eos()
             self.finish()
         elif t == gst.MESSAGE_STATE_CHANGED:
-            #print "CHANGED: ",message.parse_state_changed()
+            print "CHANGED: ",message.parse_state_changed()[0]
+            #if message.parse_state_changed()[0] == gst.STATE_PAUSED:
+            #    print "nooop"
+            #for element in self.pipeline.elements():
+            #        print element, element.get_state()[0]
+            #print ""
             pass
         
         elif t == gst.MESSAGE_ERROR:
@@ -364,13 +456,17 @@ class Pipeline:
             print message.parse_error()
 
         elif t == gst.MESSAGE_NEW_CLOCK:
-            print message.parse_new_clock()
+            #print message.parse_new_clock()
+            pass
 
         elif t == gst.MESSAGE_TAG:
             self.found_tag(message.parse_tag()) 
+        else:
+            print ""
 
     def found_tag(self, message):
-        pass#print message.keys()
+        #print message.keys()
+        pass
 
     def play(self):
         bus = self.pipeline.get_bus()
@@ -402,7 +498,7 @@ RAW_CONVERTERS = [
 
 class Transcode(Pipeline):
 
-    def __init__(self, name, elements_list, links, updater=None):
+    def __init__(self, name, elements_list, links, file_source, file_destiny, updater=None):
         """
         Generates a transcode object, capable to transcode a media file 
         according to elements and link given
@@ -412,65 +508,72 @@ class Transcode(Pipeline):
         links - tuple of pairs, containing source and sink of connections
         """
         Pipeline.__init__(self, name)
-        self.filesource = gst.element_factory_make(FILE_SOURCE, "filesource")
-        self.decode = gst.element_factory_make(DECODEBIN, "decodebin")
+        self.updater = updater
+        self.filesource = gst.element_factory_make(FILE_SOURCE)
+        self.decode = gst.element_factory_make(DECODEBIN)
         self.decode.connect("new-decoded-pad", self.new_decoded_pad)
         self.pipeline.add(self.filesource, self.decode)
         self.filesource.link(self.decode)
+        self.filesink = gst.element_factory_make(FILE_SINK)
 
-        self.filesink = gst.element_factory_make(FILE_SINK, "filesink")
+        self.filesource.set_property("location", file_source)
+        self.filesink.set_property("location", file_destiny)
+
         elements = {}
         elements.update( {"end": self.filesink})
-        for e in elements_list:
-            elements.update( {e.name: e.element_factory.create()} )
+        for name, e in elements_list.items():
+            elements.update( {name: e.element_factory.create()} )
         self.pipeline.add(*elements.values())
 
         self.starts = []
+        print links
         for (source, destiny) in links:
             if source == "start":
                 pad = elements[destiny].get_static_pad("sink")
                 self.starts += [(elements[destiny], pad)]
+                self.conv = get_possible_elements(gst.caps_from_string("ANY"), pad.get_caps() ,\
+                    RAW_CONVERTERS, [], RAW_CONVERTERS)[0].element_factory.create()
+                self.pipeline.add(self.conv)
+                self.conv.link(elements[destiny])
             else:
                 try:
-                    elements[source].link(elements[destiny])
+                    print source, '(%s)'%elements[source], ' -> ' ,destiny, '(%s)'%elements[destiny]
+                    print elements[source].link(elements[destiny])
                 except:
                     error("element '%s' couldn't link to '%s'"%(source, destiny))
-        self.updater = updater
+        time.sleep(1)
+        self.play()
 
     def new_decoded_pad(self, decodebin, pad, last):
         #print "decoded! %s"%pad.get_caps().to_string()
 
         for element, spad in self.starts:
-            conv = get_possible_elements(pad.get_caps(), spad.get_caps() ,\
-                    RAW_CONVERTERS, [], RAW_CONVERTERS)
-            if not conv:
-                return
-            conv = conv[0].element_factory.create()
-            self.pipeline.add(conv)
+            #conv = get_possible_elements(pad.get_caps(), spad.get_caps() ,\
+            #        RAW_CONVERTERS, [], RAW_CONVERTERS)
+            #if not conv:
+            #    return
+            #conv = conv[0].element_factory.create()
+            #conv.set_state(gst.STATE_PLAYING)
+            #self.pipeline.add(conv)
 
-            cpad = conv.get_static_pad("src")
-            cpad.link(spad)            
+            #cpad = conv.get_static_pad("src")
+            #cpad.link(spad)            
 
-            cpad = conv.get_static_pad("sink")
-            pad.link(cpad)
-            
-            self.starts.remove((element, spad))
-
-            #XXX: code below is helping debug
-            for i in self.pipeline.elements():
-                for p in i.src_pads():
-                    print p.is_linked()
-                    if not p.is_linked():
-                        print "not_linked source: ",i, p.get_caps().to_string()
-                for p in i.sink_pads():
-                    print p.is_linked()
-                    if not p.is_linked():
-                        print "not_linked sink: ",i, p.get_caps().to_string()
+            cpad = self.conv.get_static_pad("sink")
+            if cpad.get_caps().intersect(pad.get_caps()) != "EMPTY":
+                print "pad", pad.link(cpad)
+                #self.starts.remove((element, spad))
 
     def convert_file(self, file_source, file_destiny):
         self.filesource.set_property("location", file_source)
         self.filesink.set_property("location", file_destiny)
         self.play()
+
+    def error(self):
+        self.stop()
+        print "!!!!! Conversion failed! !!!!!"""
+        if self.updater:
+            self.updater(CONVERSION_FAILED)
 
     def finish(self):
         self.stop()
@@ -478,7 +581,4 @@ class Transcode(Pipeline):
         if self.updater:
             self.updater(CONVERSION_FINISHED)
 
-#import gtk, sys
-#file = sys.argv[-1]
-#t = Transcoder("a"); t.play_file(file)
-#gtk.main()
+import time
