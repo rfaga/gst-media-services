@@ -17,7 +17,7 @@
 # along with this program.  See LICENSE file.                                 #
 ###############################################################################
 
-import gstms
+import gstms, gst
 import gtk, gtk.glade, gnomevfs
 import gobject
 import thread, sys
@@ -31,6 +31,7 @@ TARGET_OFF = 3
 
 widgets = gtk.glade.XML(GLADE_PATH)
 
+icon_theme = gtk.icon_theme_get_default()
 args = sys.argv[1:]
 
 class FileChooserDialog:
@@ -56,6 +57,25 @@ class FileChooserDialog:
     def on_button_fc_cancel_clicked(self, widget):
         self.hide()
 
+def time_to_string(value):
+    """
+    transform a value in nanoseconds into a human-readable string (got from gst.extend)
+    """
+    s = ""
+    ms = value / gst.MSECOND
+    sec = ms / 1000
+    min = sec / 60
+    h = min/60
+    if h:
+        s += "%3.dh"%h
+    min = min%60
+    if min:
+        s += "%3.2dm"%min
+    sec = sec % 60
+    if sec:
+        s += "%3.2ds"%sec
+    return s#"%3.2dm%3.2ds" % (min, sec)
+
 
 class InputObject(gstms.File):
     """
@@ -70,28 +90,28 @@ class InputObject(gstms.File):
         """
         self.model = model
         gstms.File.__init__(self, gnomevfs.get_local_path_from_uri(uri))
+        self.name = gnomevfs.get_file_info(uri).name
     
     def on_discover(self, discover, success):
         gstms.File.on_discover(self, discover, success)
-        repr = self.__str__()
-        if repr:
-            self.model.append((str(self), self))
-
-    def __str__(self):
-        #TODO: this method should show it's representation to the file list
+        #if isn't a recognized file type, just don't add to list
+        if self.mediatype == gstms.DATA_TYPE:
+            return
+        timestamp = time_to_string(max(discover.audiolength, discover.videolength))
+        repr = "%s (%s)"%(self.name,timestamp)
         if self.mediatype == gstms.VIDEO_TYPE:
-            tag = "video"
+            self.icon = icon_theme.load_icon("video", 32, 0)
+
         elif self.mediatype == gstms.AUDIO_TYPE:
-            tag = "audio"
+            self.icon = icon_theme.load_icon("sound", 32, 0)
         elif self.mediatype == gstms.IMAGE_TYPE:
-            tag = "image"
-        else:
-            return None
-            tag = "unknow"
-        return "(%s) %s"%(tag, self.path)
+            self.icon = icon_theme.load_icon("image", 32, 0)
+        print dir(discover), discover.videolength
+        self.model.append((self.icon, repr, self))
 
     def get_path(self):
         return self.path
+
 
 
 class FileList(object):
@@ -111,12 +131,15 @@ class FileList(object):
 
         # our model shows the file, firstly it's string, followed by itself.
         #XXX: the string isn't being updated if any change occurs in the object
-        self.model = gtk.ListStore(gobject.TYPE_STRING, gobject.TYPE_PYOBJECT)
+        self.model = gtk.ListStore(gtk.gdk.Pixbuf, gobject.TYPE_STRING, gobject.TYPE_PYOBJECT)
         self.widget.set_model(self.model)
+        column = gtk.TreeViewColumn("icon", gtk.CellRendererPixbuf(), pixbuf=0)
+        self.widget.append_column(column)
+
         renderer = gtk.CellRendererText()
 
         # create a column which uses markup
-        column = gtk.TreeViewColumn("filename", renderer,  markup=0)
+        column = gtk.TreeViewColumn("filename", renderer,  markup=1)
         self.widget.append_column(column)
         self.add_files(args)
 
