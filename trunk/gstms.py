@@ -429,6 +429,7 @@ class Pipeline:
         Constructor, don't forget to construct the pipeline before using it
         """
         self.pipeline = gst.Pipeline(name)
+        self.time_format = gst.Format(gst.FORMAT_TIME)
         #self.stop()
         
 
@@ -443,8 +444,18 @@ class Pipeline:
             #print message.parse_eos()
             self.finish()
         elif t == gst.MESSAGE_STATE_CHANGED:
-            print "CHANGED: ",message.parse_state_changed()[0]
+            print "CHANGED: ",message.parse_state_changed()[0],
             #if message.parse_state_changed()[0] == gst.STATE_PAUSED:
+            try:
+                duration, position = self.pipeline.query_duration(self.time_format, None)[0], self.pipeline.query_position(self.time_format, None)[0]
+                print duration , position
+                #if position == 0L:
+                    #self.pipeline.set_state(gst.STATE_NULL)
+                    #time.sleep(0.5)
+                    #self.pipeline.set_state(gst.STATE_PLAYING)
+            except:
+                pass
+        
             #    print "nooop"
             #for element in self.pipeline.elements():
             #        print element, element.get_state()[0]
@@ -541,7 +552,7 @@ class Transcode(Pipeline):
                     print elements[source].link(elements[destiny])
                 except:
                     error("element '%s' couldn't link to '%s'"%(source, destiny))
-        time.sleep(1)
+        #time.sleep(1)
         self.play()
 
     def new_decoded_pad(self, decodebin, pad, last):
