@@ -106,7 +106,7 @@ class InputObject(gstms.File):
             self.icon = icon_theme.load_icon("sound", 32, 0)
         elif self.mediatype == gstms.IMAGE_TYPE:
             self.icon = icon_theme.load_icon("image", 32, 0)
-        print dir(discover), discover.videolength
+        #print dir(discover), discover.videolength
         self.model.append((self.icon, repr, self))
 
     def get_path(self):
@@ -164,7 +164,7 @@ class FileList(object):
         """
         files_path = []
         for row in self.model:
-            files_path += [row[1].get_path()]
+            files_path += [row[2].get_path()]
         return files_path
 
 class ProfileList:
