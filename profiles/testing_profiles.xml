@@ -70,19 +70,44 @@
             </pipeline>
 		</process>
 	</audio-profile>
-    <!-- taking this video-profile off, for now 
-	<video-profile>
-		<name>XviD (MPEG-4 ISO format)</name>
+	<audio-profile>
+		<name>OGG Theora and Vorbis</name>
 		<description>A video profile</description>
 		
-		<output-file-extension>avi</output-file-extension>
-		<plugin-needed>xvid</plugin-needed>
-		
-		<mimetype>video/mpeg4</mimetype>
+		<output-file-extension>ogg</output-file-extension>
 		
 		<process>
+			<element id="audioqueueend" type="queue" />
+
+			<element id="vorbisenc" type="required">
+				<recommended-element>vorbisenc</recommended-element>
+				<sink>ANY</sink>
+				<source>audio/x-vorbis</source>
+			</element>
+
+			<element id="oggmux" type="required">
+				<recommended-element>oggmux</recommended-element>
+				<sink>video/x-theora; audio/x-vorbis</sink>
+				<source>application/ogg</source>
+            </element>
+
+
+			<element id="theoraenc" type="required">
+				<recommended-element>theoraenc</recommended-element>
+				<sink>ANY</sink>
+				<source>video/x-theora</source>
+			</element>
+
+			<pipeline>
+                <link origin="start" destiny="vorbisenc" />
+				<link origin="vorbisenc" destiny="audioqueueend" />
+				<link origin="audioqueueend" destiny="oggmux" />
+
+                <link origin="start" destiny="theoraenc" />
+                <link origin="theoraenc" destiny="oggmux" />
+				<link origin="oggmux" destiny="end" />
+            </pipeline>
 		</process>
 	
-    </video-profile>
-    -->
+    </audio-profile>
 </media-profiles>

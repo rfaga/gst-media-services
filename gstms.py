@@ -5,15 +5,15 @@
 # Copyright (C) 2008 Roberto Faga Jr, Stefan Kost and Gstreamer team.         #
 #                                                                             #
 # This program is free software: you can redistribute it and/or modify        #
-# it under the terms of the GNU General Public License as published by        #
-# the Free Software Foundation, version 3.                                    #
+# it under the terms of the GNU Lesser General Public License as published    #
+# by the Free Software Foundation, version 3.                                 #
 #                                                                             #
 # This program is distributed in the hope that it will be useful,             #
 # but WITHOUT ANY WARRANTY; without even the implied warranty of              #
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
-# GNU General Public License for more details.                                #
+# GNU Lesser General Public License for more details.                         #
 #                                                                             #
-# You should have received a copy of the GNU General Public License           #
+# You should have received a copy of the GNU Lesser General Public License    #
 # along with this program.  See LICENSE file.                                 #
 ###############################################################################
 
@@ -38,11 +38,16 @@ CONVERSION_RUNNING = 33
 EMPTY = gst.caps_from_string('EMPTY')
 ANY = 'ANY'
 
+QUEUE = 'queue'
 FILE_SOURCE = "filesrc"
 FILE_SINK = "filesink"
 DECODEBIN = "decodebin"
 
+#if debug mode is turned on, all debug messages are printed
+DEBUG_MODE = False
+
 ################################# Misc #######################################
+
 
 class File(object):
     """
@@ -76,7 +81,6 @@ class File(object):
             self.mediatype = AUDIO_TYPE
         else:
             self.mediatype = DATA_TYPE
-        #print discover.is_video, discover.is_audio, success
 
     def set_mimetype(self, mimetype):
         """
@@ -84,11 +88,17 @@ class File(object):
         mimetype -- Mimetype string of this file
         """
         self.mimetype = mimetype
-        #print mimetype
 
+
+def debug(message):
+    """
+    Print message if debug mode is turned on
+    """
+    if DEBUG_MODE:
+        print message
 
 def error(message):
-    print "error: %s"%message
+    print "!Error: %s"%message
 
 ################################ Registry ####################################
 
@@ -290,29 +300,35 @@ class Profile:
 
         return element in gstms.Element format
         """
-        source_caps = gst.caps_from_string(elementxml.getElementsByTagName("source")[0].firstChild.nodeValue)
-        sink_caps = gst.caps_from_string(elementxml.getElementsByTagName("sink")[0].firstChild.nodeValue)
+        type = elementxml.getAttribute("type")
 
-        #let's read recommended-elements, this can help our element finder
-        recommendedsxml = elementxml.getElementsByTagName("recommended-element")
-        favorites = []
-        for r in recommendedsxml:
-            favorites += [r.firstChild.nodeValue]
- 
-        klasses = []
-        klassesxml = elementxml.getElementsByTagName("klass")
-        for klass in klassesxml:
-            klasses += [klass.firstChild.nodeValue.lower()]
+        if type == "queue":
+            element = ElementFactory(gst.element_factory_find("queue"))
 
-        #now we get the possible element in gstms.Element format.
-        # oh, and this element can be None if no element was found
-        elements = get_possible_elements(sink_caps, source_caps, favorites, klasses)
-        if not elements:
-            error("element '%s' from profile xml not found"%elementxml.getAttribute("id"))
-            return
-        
-        element = elements[0] #XXX: for now, the first of list is the chosen one
-        element.type = elementxml.getAttribute("type")
+        else:
+            source_caps = gst.caps_from_string(elementxml.getElementsByTagName("source")[0].firstChild.nodeValue)
+            sink_caps = gst.caps_from_string(elementxml.getElementsByTagName("sink")[0].firstChild.nodeValue)
+
+            #let's read recommended-elements, this can help our element finder
+            recommendedsxml = elementxml.getElementsByTagName("recommended-element")
+            favorites = []
+            for r in recommendedsxml:
+                favorites += [r.firstChild.nodeValue]
+     
+            klasses = []
+            klassesxml = elementxml.getElementsByTagName("klass")
+            for klass in klassesxml:
+                klasses += [klass.firstChild.nodeValue.lower()]
+    
+            #now we get the possible element in gstms.Element format.
+            # oh, and this element can be None if no element was found
+            elements = get_possible_elements(sink_caps, source_caps, favorites, klasses)
+            if not elements:
+                error("element '%s' from profile xml not found"%elementxml.getAttribute("id"))
+                return
+            
+            element = elements[0] #XXX: for now, the first of list is the chosen one
+        element.type = type
         element.load_possible_properties()
         
         #TODO: parse properties options from elementxml
@@ -444,27 +460,26 @@ class Pipeline:
             #print message.parse_eos()
             self.finish()
         elif t == gst.MESSAGE_STATE_CHANGED:
-            print "CHANGED: ",message.parse_state_changed()[0],
-            #if message.parse_state_changed()[0] == gst.STATE_PAUSED:
-            try:
-                duration, position = self.pipeline.query_duration(self.time_format, None)[0], self.pipeline.query_position(self.time_format, None)[0]
-                print duration , position
-                #if position == 0L:
-                    #self.pipeline.set_state(gst.STATE_NULL)
-                    #time.sleep(0.5)
-                    #self.pipeline.set_state(gst.STATE_PLAYING)
-            except:
-                pass
-        
-            #    print "nooop"
-            #for element in self.pipeline.elements():
-            #        print element, element.get_state()[0]
-            #print ""
-            pass
+            if DEBUG_MODE:
+                s =  "PIPELINE STATE CHANGED: '%s' "%message.parse_state_changed()[0]
+                #if message.parse_state_changed()[0] == gst.STATE_PAUSED:
+                try:
+                    duration, position = self.pipeline.query_duration(self.time_format, None)[0], self.pipeline.query_position(self.time_format, None)[0]
+                    s += "%s / %s"%(position, duration)
+
+                    #trying to manage a bug
+                    #if position == 0L:
+                    #    s += " - Trying to manage a bug"
+                    #    self.pipeline.set_state(gst.STATE_NULL)
+                    #    time.sleep(1)
+                    #    self.pipeline.set_state(gst.STATE_PLAYING)
+                except:
+                    s += "no duration given"
+                debug(s)
         
         elif t == gst.MESSAGE_ERROR:
             #TODO: send error message to a right place
-            print message.parse_error()
+            error(message.parse_error())
 
         elif t == gst.MESSAGE_NEW_CLOCK:
             #print message.parse_new_clock()
@@ -472,8 +487,6 @@ class Pipeline:
 
         elif t == gst.MESSAGE_TAG:
             self.found_tag(message.parse_tag()) 
-        else:
-            print ""
 
     def found_tag(self, message):
         #print message.keys()
@@ -537,28 +550,33 @@ class Transcode(Pipeline):
         self.pipeline.add(*elements.values())
 
         self.starts = []
-        print links
         for (source, destiny) in links:
             if source == "start":
                 pad = elements[destiny].get_static_pad("sink")
-                self.starts += [(elements[destiny], pad)]
-                self.conv = get_possible_elements(gst.caps_from_string("ANY"), pad.get_caps() ,\
+                #self.starts += [(elements[destiny], pad)]
+
+                #match one of RAW CONVERTERS to put in pipeline
+                queue = ElementFactory(gst.element_factory_find(QUEUE)).element_factory.create()
+                conv = get_possible_elements(gst.caps_from_string("ANY"), pad.get_caps() ,\
                     RAW_CONVERTERS, [], RAW_CONVERTERS)[0].element_factory.create()
-                self.pipeline.add(self.conv)
-                self.conv.link(elements[destiny])
+                self.pipeline.add(queue, conv)
+                queue.link(conv)
+                s = "Linking (start point) -> queue -> (%s): %s"%(elements[destiny], conv.link(elements[destiny]))
+                self.starts += [(conv, queue)]
             else:
                 try:
-                    print source, '(%s)'%elements[source], ' -> ' ,destiny, '(%s)'%elements[destiny]
-                    print elements[source].link(elements[destiny])
+                    s = "Linking (%s) -> (%s): %s"%(elements[source], elements[destiny], elements[source].link(elements[destiny]))
                 except:
                     error("element '%s' couldn't link to '%s'"%(source, destiny))
+            debug(s)
         #time.sleep(1)
         self.play()
 
     def new_decoded_pad(self, decodebin, pad, last):
         #print "decoded! %s"%pad.get_caps().to_string()
 
-        for element, spad in self.starts:
+        #for element, spad in self.starts:
+        for conv, queue in self.starts:
             #conv = get_possible_elements(pad.get_caps(), spad.get_caps() ,\
             #        RAW_CONVERTERS, [], RAW_CONVERTERS)
             #if not conv:
@@ -570,10 +588,15 @@ class Transcode(Pipeline):
             #cpad = conv.get_static_pad("src")
             #cpad.link(spad)            
 
-            cpad = self.conv.get_static_pad("sink")
+            cpad = conv.get_static_pad("sink")
             if cpad.get_caps().intersect(pad.get_caps()) != "EMPTY":
-                print "pad", pad.link(cpad)
-                #self.starts.remove((element, spad))
+                try:
+                    qpad = queue.get_static_pad("sink")
+                    pad.link(qpad)
+                    self.starts.remove((conv,queue))
+                    debug("Decodebin: decoded pad is now linked")
+                except:
+                    error("Decodebin: pad %s couldn't be linked!"%pad)
 
     def convert_file(self, file_source, file_destiny):
         self.filesource.set_property("location", file_source)
@@ -582,13 +605,13 @@ class Transcode(Pipeline):
 
     def error(self):
         self.stop()
-        print "!!!!! Conversion failed! !!!!!"""
+        debug("!!!!! Conversion failed! !!!!!""")
         if self.updater:
             self.updater(CONVERSION_FAILED)
 
     def finish(self):
         self.stop()
-        print "***** File finished *****"
+        debug("***** File finished *****")
         if self.updater:
             self.updater(CONVERSION_FINISHED)
 
