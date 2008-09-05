@@ -1,4 +1,4 @@
-These files are part of gst-media-services, a project in alpha testing phase.
+These files are part of gst-media-services, currently at alpha version.
 
 ****************************** Running project ******************************
 
@@ -10,7 +10,6 @@ EncodingProfile:
 - Description of fields and format
 
 GSTMS lib:
-- Fix bug of 1sec pause between conversion construction and conversion play
 - try to find other raw conversions, currently there are only ffmpeg_colorspace and audioconvert
 - Correctly place file output and gets some confirmation in overwrite case 
 

@@ -5,15 +5,15 @@
 # Copyright (C) 2008 Roberto Faga Jr, Stefan Kost and Gstreamer team.         #
 #                                                                             #
 # This program is free software: you can redistribute it and/or modify        #
-# it under the terms of the GNU General Public License as published by        #
-# the Free Software Foundation, version 3.                                    #
+# it under the terms of the GNU Lesser General Public License as published    #
+# by the Free Software Foundation, version 3.                                 #
 #                                                                             #
 # This program is distributed in the hope that it will be useful,             #
 # but WITHOUT ANY WARRANTY; without even the implied warranty of              #
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
-# GNU General Public License for more details.                                #
+# GNU Lesser General Public License for more details.                         #
 #                                                                             #
-# You should have received a copy of the GNU General Public License           #
+# You should have received a copy of the GNU Lesser General Public License    #
 # along with this program.  See LICENSE file.                                 #
 ###############################################################################
 
@@ -23,6 +23,8 @@ import gobject
 import thread, sys
 
 GLADE_PATH = "convert_anything.glade"
+
+gstms.DEBUG_MODE = True
 
 #TAGS
 PIPELINE_ONLY = 1
@@ -141,7 +143,7 @@ class FileList(object):
         # create a column which uses markup
         column = gtk.TreeViewColumn("filename", renderer,  markup=1)
         self.widget.append_column(column)
-        self.add_files(args)
+        self.add_files(args) #XXX: this line is horrible
 
     def add_files(self, files):
         for f in files:
@@ -180,6 +182,7 @@ class ProfileList:
         self.widget.set_model(self.model)
         for profile in profiles:
             self.model.append((str(profile), profile))
+        self.widget.set_active(0)
 
     def get_selected(self):
         return self.model[self.widget.get_active()][1]
@@ -262,7 +265,7 @@ class MainDialog:
         #profile.transcode(self.update_progressbar)
         self.worklist = self.filelist.get_files_path()
         if self.worklist:
-            print "now going to next file '%s'"%self.worklist[0]
+            gstms.debug("Going to convert file '%s'"%self.worklist[0])
             self.button_transcode.set_property("sensitive", False)
             self.vbox_filelist.set_property("visible", False)
             self.profile.transcode(self.worklist.pop(0), self.updater)
@@ -285,13 +288,13 @@ class MainDialog:
         elif self.area_video.get_property("visible"):
             return self.videoprofiles.get_selected()
         else:
-            print "Error: no profile is able to use conversion"
+            gstms.error("Error: no profile is able to use conversion")
    
     def updater(self, message, fraction=0.0):
         self.update_progressbar(fraction)
         if message == gstms.CONVERSION_FINISHED:
             if self.worklist:
-                print "now going to next file '%s'"%self.worklist[0]
+                gstms.debug("Going to convert file '%s'"%self.worklist[0])
                 self.profile.transcode(self.worklist.pop(0), self.updater)
             else:
                 self.button_transcode.set_property("visible", False)
@@ -302,5 +305,7 @@ class MainDialog:
 
     def update_progressbar(self, fraction):
         print fraction
-main = MainDialog()
-gtk.main()
+
+if __name__ == "__main__":
+    main = MainDialog()
+    gtk.main()
