@@ -3,10 +3,10 @@ bin_PROGRAMS = gst-app
 
 # list of source files
 # the prefix is the name of the binary
-gst_app_SOURCES = main.c play.c
+gst_app_SOURCES = main.c gstms.c
 
 # list of headers we're not going to install
-noinst_HEADERS = gst-app.h play.h
+noinst_HEADERS = gstms.h
 
 # our CFLAGS and LDFLAGS used for compiling and linking
 # make sure you prefix these with the name of your binary
