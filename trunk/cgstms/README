@@ -1,0 +1,13 @@
+These files are part of gst-media-services, currently being ported to C.
+
+****************************** Running project ******************************
+
+You can't run the project right now... try python-prototype to test the idea.
+
+****************************** Missing features *****************************
+
+Everything!
+
+******************************* Forked code *********************************
+
+This tool was forked from gst-app template, from Gstreamer cvs. Thanks for the original authors!
